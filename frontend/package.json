@@ -1,0 +1,30 @@
+{
+  "name": "same-frequency-live-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "同频现场 · 腾讯音乐高校 AI Hackathon Phase 1 移动端 H5 演示（React + TypeScript + Vite + Tailwind CSS）",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "smoke": "node scripts/matching-smoke.mjs",
+    "e2e": "node scripts/e2e-smoke.mjs"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.8",
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.5.0",
+    "tailwindcss": "^4.1.8",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}
