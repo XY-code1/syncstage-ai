@@ -104,6 +104,7 @@ interface SessionContextValue {
   toggleScope: (scope: AuthorizationScope) => void
   setScopes: (scopes: AuthorizationScope[]) => void
   completeAuthorization: () => void
+  destroyEventAgent: () => void
 
   rawIntent: string
   setRawIntent: (text: string) => void
@@ -240,6 +241,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const setScopes = useCallback((scopes: AuthorizationScope[]) => update(() => ({ scopes })), [update])
 
   const completeAuthorization = useCallback(() => update(() => ({ authorized: true })), [update])
+  const destroyEventAgent = useCallback(() => {
+    update((prev) => ({ ...emptyState, concertId: prev.concertId, scopes: [] }))
+    pushToast('本场同行 Agent 已销毁，授权与临时数据已撤回', 'success')
+  }, [pushToast, update])
 
   const setRawIntent = useCallback((text: string) => update(() => ({ rawIntent: text })), [update])
 
@@ -516,6 +521,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       toggleScope,
       setScopes,
       completeAuthorization,
+      destroyEventAgent,
       rawIntent: state.rawIntent,
       setRawIntent,
       parsedIntent: state.parsedIntent,
@@ -554,6 +560,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       changeDemoCase,
       changeScenario,
       completeAuthorization,
+      destroyEventAgent,
       confirmMeeting,
       createMemory,
       createRoom,

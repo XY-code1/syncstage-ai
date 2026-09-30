@@ -4,7 +4,7 @@ import { useSession } from '../store/session'
 export function AppFrame({ children }: { children: ReactNode }) {
   return (
     <div className='stage-surface min-h-screen w-full'>
-      <div className='relative mx-auto flex min-h-screen w-full max-w-[440px] flex-col bg-stage-950/55 shadow-[0_0_140px_-50px_rgba(49,194,124,0.45)] sm:border-x sm:border-white/6'>
+      <div className='relative mx-auto flex min-h-screen w-full max-w-[390px] flex-col overflow-x-hidden bg-stage-950 shadow-[0_0_120px_-44px_rgba(49,194,124,0.38)] sm:border-x sm:border-white/8'>
         {children}
       </div>
     </div>

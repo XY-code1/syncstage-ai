@@ -7,7 +7,7 @@
 
 约束：
 - 任何"创建房间 / 共享集合点 / 保留联系"的动作都必须先进入 pending_confirmation；
-- 只有发起方与受邀方都确认后，create_room 才允许执行。
+- 只有发起方与受邀方都确认后，create_temporary_room 才允许执行。
 """
 
 from __future__ import annotations
@@ -42,15 +42,19 @@ AGENT_PHASES: tuple[dict[str, str], ...] = (
 
 PHASE_OF_TOOL: dict[str, str] = {
     'parse_social_intent': 'understand',
-    'get_music_profile': 'profile',
+    'get_authorized_music_profile': 'profile',
     'get_event_context': 'profile',
-    'search_event_candidates': 'search',
+    'search_same_event_candidates': 'search',
     'apply_safety_constraints': 'safety',
     'rank_candidates': 'rank',
     'build_group': 'plan',
     'generate_grounded_reason': 'plan',
-    'create_room': 'plan',
+    'send_mutual_consent_invitation': 'plan',
+    'create_temporary_room': 'plan',
     'collect_feedback': 'plan',
+    'verify_same_event': 'search', 'compare_arrival_plan': 'rank', 'compare_music_profile': 'rank',
+    'compare_social_intent': 'rank', 'negotiate_group_size': 'plan', 'verify_safety_constraints': 'safety',
+    'identify_conflicts': 'safety', 'generate_handshake_report': 'plan',
 }
 
 
@@ -180,6 +184,7 @@ class AgentState:
     provider_info: dict[str, Any] = field(default_factory=dict)
     created_at: float = 0.0
     updated_at: float = 0.0
+    handshake_reports: dict[str, Any] = field(default_factory=dict)
 
     def add_trace(self, record: ToolTraceRecord) -> None:
         self.trace.append(record)
@@ -231,6 +236,7 @@ class AgentState:
             'provider': self.provider_info,
             'createdAt': self.created_at,
             'updatedAt': self.updated_at,
+            'handshakeReports': self.handshake_reports,
         }
 
 

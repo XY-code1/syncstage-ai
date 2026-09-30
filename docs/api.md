@@ -1,4 +1,4 @@
-# 同频现场 · 接口契约
+# SyncStage · 接口契约
 
 Base URL：`http://127.0.0.1:8000`（可用 `.env` 的 `PORT` 调整；前端通过 `VITE_API_BASE_URL` 指向它）
 
@@ -103,7 +103,7 @@ Base URL：`http://127.0.0.1:8000`（可用 `.env` 的 `PORT` 调整；前端通
 | GET | `/api/concerts/{concertId}` | 演出详情，找不到返回 404 |
 | GET | `/api/concerts/{concertId}/attendees` | 本场标记同频意愿的匿名观众 |
 | GET | `/api/concerts/{concertId}/room-tasks` | 候场任务清单 |
-| POST | `/api/concerts/{concertId}/memory-card` | 生成现场回忆卡 |
+| POST | `/api/concerts/{concertId}/memory-card` | 旧版兼容端点，当前主演示链路不再使用 |
 | POST | `/api/concerts/{concertId}/matches` | 兼容旧表单式偏好的匹配入口（同样返回 `scoreBreakdown` + `evidence`） |
 | POST | `/api/concerts/{concertId}/icebreakers` | 生成音乐破冰问题 |
 | POST | `/api/ai/tags` | 生成结构化音乐标签（未配置大模型时走规则） |
@@ -132,3 +132,4 @@ Base URL：`http://127.0.0.1:8000`（可用 `.env` 的 `PORT` 调整；前端通
 1. 后端 `.env` 设置 `TME_PROVIDER=official`、`TME_CLIENT_ID`、`TME_CLIENT_SECRET`、`TME_API_BASE_URL`；
 2. 按 `backend/app/integrations/official_tme.py` 的 `TODO(1..8)` 实现三个方法（当前全部抛 `TMEDataUnavailable`，不伪造实现）；
 3. Agent、路由与前端无需改动。
+

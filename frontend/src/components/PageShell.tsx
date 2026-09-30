@@ -22,7 +22,7 @@ export function PageShell({
   hideHeader?: boolean
 }) {
   return (
-    <div className='flex min-h-screen flex-col'>
+    <div className='ai-stage flex min-h-screen flex-col'>
       {hideHeader ? null : (
         <header className='safe-top sticky top-0 z-30 border-b border-white/6 bg-stage-950/88 px-4 pb-3 pt-3 backdrop-blur-xl'>
           <div className='flex items-center gap-3'>
@@ -37,8 +37,8 @@ export function PageShell({
               </button>
             ) : null}
             <div className='min-w-0 flex-1'>
-              <p className='truncate text-[15px] font-semibold text-white'>{title}</p>
-              {subtitle ? <p className='truncate text-[11px] text-white/45'>{subtitle}</p> : null}
+              <p className='truncate text-base font-semibold text-white'>{title}</p>
+              {subtitle ? <p className='truncate text-sm text-white/50'>{subtitle}</p> : null}
             </div>
             {right}
           </div>

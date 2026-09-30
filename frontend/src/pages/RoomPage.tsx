@@ -4,14 +4,12 @@ import { Avatar } from '../components/Avatar'
 import { PageShell } from '../components/PageShell'
 import {
   AlertIcon,
-  ArrowRightIcon,
   CheckIcon,
   ClockIcon,
   MapPinIcon,
   MusicIcon,
   RefreshIcon,
   ShieldIcon,
-  SparkleIcon,
   UsersIcon,
 } from '../components/icons'
 import { Button, Card, DemoBadge, SectionTitle, Sheet, StateView } from '../components/ui'
@@ -35,6 +33,7 @@ export function RoomPage() {
   const [reportOpen, setReportOpen] = useState(false)
   const [reportReason, setReportReason] = useState('')
   const [nudged, setNudged] = useState<string[]>([])
+  const [locationSharing, setLocationSharing] = useState(false)
   const requested = useRef(false)
 
   useEffect(() => {
@@ -99,20 +98,12 @@ export function RoomPage() {
   return (
     <PageShell
       title='同频临时房间'
-      subtitle={room.members.length + ' 人小组 · 散场后自动解散'}
+      subtitle={room.members.length + ' 人小组 · 活动结束 24 小时后自动归档'}
       step={5}
       onBack={() => navigate(`/concert/${concertId}/matches`)}
       right={<DemoBadge />}
       footer={
         <div className='flex flex-col gap-2'>
-          <Button
-            size='lg'
-            full
-            icon={<SparkleIcon className='h-4 w-4' />}
-            onClick={() => navigate(`/concert/${concertId}/memory`)}
-          >
-            演出结束了，生成现场回忆卡
-          </Button>
           <button
             type='button'
             onClick={() => setExitOpen(true)}
@@ -200,6 +191,20 @@ export function RoomPage() {
               </Button>
             )}
           </Card>
+          <button
+            type='button'
+            aria-pressed={locationSharing}
+            onClick={() => setLocationSharing((value) => !value)}
+            className='mt-3 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.025] px-3 py-2.5 text-left'
+          >
+            <span>
+              <span className='block text-[12px] text-white/80'>位置共享</span>
+              <span className='mt-0.5 block text-[10.5px] text-white/40'>默认关闭，仅建议使用公开集合点</span>
+            </span>
+            <span className={'rounded-pill px-2.5 py-1 text-[10px] ' + (locationSharing ? 'bg-brand-500 text-stage-950' : 'bg-white/8 text-white/50')}>
+              {locationSharing ? '已开启' : '已关闭'}
+            </span>
+          </button>
         </section>
 
         <section>
@@ -236,8 +241,8 @@ export function RoomPage() {
 
         <section>
           <SectionTitle
-            title='音乐破冰问题'
-            hint='来自你们的共同歌曲，先聊歌再聊别的'
+            title='AI 音乐破冰卡'
+            hint='来自双方已授权的共同歌曲；只提供一次性话题，不代替用户持续聊天'
             icon={<MusicIcon className='h-4 w-4 text-brand-400' />}
             right={
               <Button
@@ -286,6 +291,9 @@ export function RoomPage() {
             <Button variant='secondary' onClick={() => setReportOpen(true)} icon={<AlertIcon className='h-4 w-4' />}>
               举报这位同行者
             </Button>
+            <Button variant='secondary' onClick={() => pushToast('已拉黑该同行者，后续匹配将自动排除', 'success')}>
+              拉黑这位同行者
+            </Button>
             <Button variant='ghost' onClick={() => setExitOpen(true)}>
               退出这个房间
             </Button>
@@ -300,16 +308,16 @@ export function RoomPage() {
           </Card>
         ) : null}
 
-        <Button variant='secondary' full trailingIcon={<ArrowRightIcon className='h-4 w-4' />} onClick={() => navigate(`/concert/${concertId}/memory`)}>
-          去看看这次会留下什么
-        </Button>
+        <p className='rounded-2xl border border-white/8 bg-white/[0.02] px-3.5 py-3 text-[11px] leading-relaxed text-white/45'>
+          本房间仅服务演出前与候场同行，活动结束 24 小时后自动归档，不保留持续社交入口。
+        </p>
       </div>
 
       <Sheet
         open={exitOpen}
         onClose={() => setExitOpen(false)}
         title='要退出这个房间吗？'
-        description='退出后房间内的临时信息会清除，已经生成的回忆卡会保留在你的现场记录里。'
+        description='退出后房间内的临时信息会清除，不再保留持续社交入口。'
       >
         <div className='flex flex-col gap-2'>
           <Button

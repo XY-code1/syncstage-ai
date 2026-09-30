@@ -5,15 +5,12 @@ import { JudgeBanner } from './components/JudgeBanner'
 import { AgentProgressPage } from './pages/AgentProgressPage'
 import { ConcertDetailPage } from './pages/ConcertDetailPage'
 import { ConcertListPage } from './pages/ConcertListPage'
-import { IntentConfirmPage } from './pages/IntentConfirmPage'
 import { IntentPage } from './pages/IntentPage'
 import { MatchResultsPage } from './pages/MatchResultsPage'
-import { MemoryCardPage } from './pages/MemoryCardPage'
 import { MusicAuthPage } from './pages/MusicAuthPage'
-import { PreferencesPage } from './pages/PreferencesPage'
 import { RoomPage } from './pages/RoomPage'
-import { TagConfirmPage } from './pages/TagConfirmPage'
 import { SessionProvider } from './store/session'
+import { ShowcasePage } from './pages/ShowcasePage'
 
 export default function App() {
   return (
@@ -27,14 +24,10 @@ export default function App() {
           <Route path='/concert/:concertId' element={<ConcertDetailPage />} />
           <Route path='/concert/:concertId/authorize' element={<MusicAuthPage />} />
           <Route path='/concert/:concertId/intent' element={<IntentPage />} />
-          <Route path='/concert/:concertId/intent/confirm' element={<IntentConfirmPage />} />
           <Route path='/concert/:concertId/agent' element={<AgentProgressPage />} />
           <Route path='/concert/:concertId/matches' element={<MatchResultsPage />} />
-          {/* 保留的补充页面 */}
-          <Route path='/concert/:concertId/preferences' element={<PreferencesPage />} />
-          <Route path='/concert/:concertId/tags' element={<TagConfirmPage />} />
           <Route path='/concert/:concertId/room' element={<RoomPage />} />
-          <Route path='/concert/:concertId/memory' element={<MemoryCardPage />} />
+          <Route path='/showcase' element={<ShowcasePage />} />
           <Route path='*' element={<Navigate to='/' replace />} />
         </Routes>
       </AppFrame>

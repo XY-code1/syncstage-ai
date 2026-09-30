@@ -13,7 +13,7 @@ const FLOW = [
   { title: '确认标签', detail: '把你说的话整理成可以匹配的标签' },
   { title: '查看匹配', detail: '3 位候选人，附上具体的匹配理由' },
   { title: '双向确认', detail: '双方都按下确认，房间才会生成' },
-  { title: '现场回忆', detail: '散场后留下一张属于这场的回忆卡' },
+  { title: '建立同行房间', detail: '双方确认后进入候场协作' },
 ]
 
 export function ConcertListPage() {
@@ -52,19 +52,19 @@ export function ConcertListPage() {
             <span className='flex h-8 w-8 items-center justify-center rounded-xl bg-brand-500/15 text-brand-400'>
               <MusicIcon className='h-4 w-4' />
             </span>
-            <span className='text-[15px] font-semibold text-white'>同频现场</span>
+            <span className='text-[15px] font-semibold text-white'>QQ音乐 · 演出</span>
           </div>
           <DemoBadge />
         </div>
 
         <h1 className='mt-5 text-[26px] font-semibold leading-snug text-white'>
-          在同场观众里，
+          一起去现场，
           <br />
-          找到听同一首歌的人。
+          和同频的人共同抵达。
         </h1>
         <p className='mt-3 text-[13px] leading-relaxed text-white/55'>
-          基于音乐口味、演出期待、社交意愿与安全偏好，匹配同场同行者或 2～4 人临时小组。
-          每一条匹配都会说明理由，集合点只选公开区域。
+          这是 QQ音乐演出页的概念功能入口。基于已授权的模拟音乐画像与安全偏好，匹配同场同行者；
+          每一条理由都能回到具体歌曲、歌手或歌单标签。
         </p>
 
         <div className='mt-4 flex flex-wrap gap-1.5'>
@@ -180,7 +180,7 @@ export function ConcertListPage() {
         ) : null}
 
         <div className='mt-6'>
-          <SectionTitle title='一次同频是怎么发生的' hint='从填写偏好到留下回忆卡，一共五步' />
+          <SectionTitle title='一次同行是怎么发生的' hint='从音乐授权到建立同行房间，一共五步' />
           <Card className='p-0'>
             {FLOW.map((item, index) => (
               <div
@@ -224,3 +224,4 @@ export function ConcertListPage() {
     </div>
   )
 }
+

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "同频现场 · 腾讯音乐高校 AI Hackathon Phase 1 移动端 H5 演示（React + TypeScript + Vite + Tailwind CSS）",
+  "description": "SyncStage · 腾讯音乐高校 AI Hackathon Phase 1 移动端 H5 演示（React + TypeScript + Vite + Tailwind CSS）",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -28,3 +28,4 @@
     "vite": "^6.3.5"
   }
 }
+

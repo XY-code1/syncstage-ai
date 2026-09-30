@@ -5,7 +5,7 @@
 2. 检索同场候选人 -> 执行安全硬约束 -> 排序 -> 组队 -> 生成有证据的理由；
 3. 找不到合适对象时返回 no_match，绝不编造候选人；
 4. 创建房间、共享集合点、保留联系之前必须进入 pending_confirmation；
-5. 只有双方都确认后才允许调用 create_room；
+5. 只有双方都确认后才允许调用 create_temporary_room；
 6. 大模型不可用时使用本地规则解析与文案模板 fallback。
 """
 
@@ -42,6 +42,11 @@ class AgentOrchestrator:
     def store(self, state: AgentState) -> None:
         with self._lock:
             self._sessions[state.session_id] = state
+
+    def destroy(self, session_id: str) -> bool:
+        """销毁一场演出对应的临时 Agent 及其全部内存数据。"""
+        with self._lock:
+            return self._sessions.pop(session_id, None) is not None
 
     def _gc(self) -> None:
         now = time.time()
@@ -165,7 +170,7 @@ class AgentOrchestrator:
         # 2. 读取授权音乐画像
         await self.call_tool(
             ctx,
-            'get_music_profile',
+            'get_authorized_music_profile',
             user_id=viewer_social.user_id,
             scopes=state.authorized_scopes or None,
         )
@@ -192,7 +197,7 @@ class AgentOrchestrator:
         viewer = build_facts(state.music_profile, viewer_social)
 
         # 4. 检索同场候选人
-        search_result = await self.call_tool(ctx, 'search_event_candidates', event_id=event_id)
+        search_result = await self.call_tool(ctx, 'search_same_event_candidates', event_id=event_id)
         candidates: list[CandidateFacts] = search_result.payload or []
 
         # 5. 安全硬约束
@@ -222,6 +227,25 @@ class AgentOrchestrator:
         rank_result = await self.call_tool(ctx, 'rank_candidates', viewer=viewer, intent=intent, candidates=kept)
         ranked = rank_result.payload or []
 
+        # Agent-to-Agent 只交换匿名结构字段，禁止自由聊天与个人敏感数据。
+        for tool_name in (
+            'verify_same_event', 'compare_arrival_plan', 'compare_music_profile', 'compare_social_intent',
+            'negotiate_group_size', 'verify_safety_constraints', 'identify_conflicts', 'generate_handshake_report',
+        ):
+            await self.call_tool(ctx, tool_name, candidate_count=len(ranked))
+        state.handshake_reports = {
+            item['userId']: {
+                'candidateId': item['userId'],
+                'agreements': ['已核验为同一场演出'] + ([f"共同歌曲：{'、'.join(item.get('sharedSongs', [])[:2])}"] if item.get('sharedSongs') else []),
+                'conflicts': list(item.get('differences') or []),
+                'needsHumanConfirmation': ['到场时间与集合时刻需双方真人确认'],
+                'evidence': [{'field': e.get('sourceLabel', ''), 'value': e.get('text', ''), 'source': e.get('source', '')} for e in item.get('evidence', [])[:6]],
+                'hiddenFields': ['真实姓名', '联系方式', '精确位置', '原始听歌历史'],
+                'safetyResult': 'passed',
+                'exchangedFields': ['eventId', 'arrivalWindow', 'musicTags', 'socialIntent', 'groupSize', 'safetyConstraints'],
+            } for item in ranked
+        }
+
         # 7. 组队
         await self.call_tool(ctx, 'build_group', viewer=viewer, intent=intent, ranked=ranked)
 
@@ -236,6 +260,8 @@ class AgentOrchestrator:
         """发起方确认要邀请谁 —— 进入 pending_confirmation。"""
 
         state = self._require(session_id)
+        ctx = ToolContext(provider=self.provider, state=state)
+        await self.call_tool(ctx, 'send_mutual_consent_invitation', candidate_id=candidate_id)
         state.pending_confirmation = {
             'required': True,
             'status': 'awaiting_peer',
@@ -257,7 +283,7 @@ class AgentOrchestrator:
         if not pending.get('required') or not pending.get('proposerConfirmed'):
             raise ValueError('还没有发起邀请，不能直接确认')
         pending = {**pending, 'peerConfirmed': bool(accept), 'status': 'both_confirmed' if accept else 'declined'}
-        pending['nextAction'] = 'create_room' if accept else 'back_to_matches'
+        pending['nextAction'] = 'create_temporary_room' if accept else 'back_to_matches'
         pending['reason'] = '双方都已确认，Agent 可以创建临时房间了' if accept else '对方暂时不方便，换一个人试试'
         state.pending_confirmation = pending
         state.updated_at = time.time()
@@ -279,7 +305,7 @@ class AgentOrchestrator:
         if not pending.get('proposerConfirmed') or not pending.get('peerConfirmed'):
             result = await self.call_tool(
                 ctx,
-                'create_room',
+                'create_temporary_room',
                 partner=partner,
                 viewer_social=viewer_social,
                 viewer_facts=viewer,
@@ -292,7 +318,7 @@ class AgentOrchestrator:
 
         await self.call_tool(
             ctx,
-            'create_room',
+            'create_temporary_room',
             partner=partner,
             viewer_social=viewer_social,
             viewer_facts=viewer,
@@ -357,3 +383,4 @@ def get_session(session_id: str) -> AgentState | None:
 
 def new_session_id() -> str:
     return uuid.uuid4().hex
+

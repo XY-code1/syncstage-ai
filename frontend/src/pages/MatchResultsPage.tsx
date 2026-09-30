@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Avatar } from '../components/Avatar'
 import { MockNotice, QQMusicBar } from '../components/QQMusicBar'
 import { AgentEvidenceButton, AgentEvidenceSheet, BandPill, EvidenceList, ScoreBars } from '../components/AgentEvidence'
-import { Button, Card, Chip, DemoBadge, SectionTitle, StateView } from '../components/ui'
+import { Button, Card, Chip, DemoBadge, SectionTitle, Sheet, StateView } from '../components/ui'
 import { CheckIcon, SparkleIcon, UsersIcon } from '../components/icons'
 import { cn } from '../lib/cn'
 import { useSession } from '../store/session'
@@ -31,6 +31,7 @@ export function MatchResultsPage() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [feedbackSent, setFeedbackSent] = useState(false)
+  const [reportId, setReportId] = useState<string | null>(null)
 
   if (!agent || agentRunning) {
     return (
@@ -79,7 +80,7 @@ export function MatchResultsPage() {
               title='这一轮没有找到同频的人'
               description={agent.pendingConfirmation.reason || '所有候选人都被你的安全条件排除了。Agent 不会编造候选人，也不会替你放宽安全条件。'}
               actionLabel='放宽条件再匹配'
-              onAction={() => navigate(`/concert/${concertId}/intent/confirm`)}
+              onAction={() => navigate(`/concert/${concertId}/intent`)}
             />
             <Card>
               <SectionTitle title='被排除的候选人' hint={`共 ${agent.excludedCandidates.length} 人`} />
@@ -104,6 +105,7 @@ export function MatchResultsPage() {
   const pending = agent.pendingConfirmation
   const invited = ranked.find((item) => item.userId === pending.candidateId) ?? null
   const confirmStep = pending.status === 'both_confirmed' || pending.status === 'confirmed' ? 2 : peerViewed ? 1 : 0
+  const report = reportId ? agent.handshakeReports?.[reportId] : null
 
   return (
     <div className='flex min-h-screen flex-col'>
@@ -191,11 +193,11 @@ export function MatchResultsPage() {
               <CandidateCard
                 key={candidate.userId}
                 candidate={candidate}
-                judgeMode={judgeMode}
                 invitedId={pending.candidateId ?? null}
                 canInvite={pending.status !== 'both_confirmed' && pending.status !== 'confirmed'}
                 onInvite={() => void invite(candidate.userId)}
                 onEvidence={() => setSheetOpen(true)}
+                onHandshake={() => setReportId(candidate.userId)}
               />
             ))}
           </div>
@@ -235,24 +237,34 @@ export function MatchResultsPage() {
       </main>
 
       <AgentEvidenceSheet open={sheetOpen} onClose={() => setSheetOpen(false)} agent={agent} focus={invited ?? ranked[0]} />
+      <Sheet open={Boolean(report)} onClose={() => setReportId(null)} title='Agent 预沟通报告' description='双方 Agent 仅交换匿名结构字段，不进行自由聊天。'>
+        {report ? <div className='max-h-[68vh] space-y-4 overflow-y-auto pr-1'>
+          <ReportBlock title='一致条件' items={report.agreements} tone='brand' />
+          <ReportBlock title='冲突条件' items={report.conflicts.length ? report.conflicts : ['未发现硬冲突']} tone={report.conflicts.length ? 'warn' : 'brand'} />
+          <ReportBlock title='待真人确认条件' items={report.needsHumanConfirmation} tone='violet' />
+          <ReportBlock title='使用的数据证据' items={report.evidence.map((v) => `${v.field}：${v.value}（${v.source}）`)} tone='neutral' />
+          <ReportBlock title='被隐藏的数据' items={report.hiddenFields} tone='neutral' />
+          <div className='rounded-2xl border border-brand-500/25 bg-brand-500/[.06] p-3'><p className='text-sm font-semibold text-brand-200'>安全过滤结果：已通过</p><p className='mt-1 text-xs leading-relaxed text-white/45'>未交换真实姓名、联系方式、精确位置和原始听歌历史。</p></div>
+        </div> : null}
+      </Sheet>
     </div>
   )
 }
 
 function CandidateCard({
   candidate,
-  judgeMode,
   invitedId,
   canInvite,
   onInvite,
   onEvidence,
+  onHandshake,
 }: {
   candidate: ScoredCandidate
-  judgeMode: boolean
   invitedId: string | null
   canInvite: boolean
   onInvite: () => void
   onEvidence: () => void
+  onHandshake: () => void
 }) {
   const invited = invitedId === candidate.userId
   return (
@@ -288,12 +300,21 @@ function CandidateCard({
           </p>
         </div>
         <div className='rounded-2xl border border-white/8 bg-white/[0.025] px-3 py-2'>
-          <p className='text-[10.5px] text-white/40'>共同目的</p>
+          <p className='text-[10.5px] text-white/40'>共同歌手</p>
           <p className='mt-1 text-[11.5px] leading-relaxed text-white/75'>
-            {candidate.sharedPurposes.length ? candidate.sharedPurposes.join('、') : '暂无'}
+            {candidate.sharedArtists.length ? candidate.sharedArtists.join('、') : candidate.candidate.topArtists.slice(0, 2).join('、')}
           </p>
         </div>
+        <div className='rounded-2xl border border-white/8 bg-white/[0.025] px-3 py-2'>
+          <p className='text-[10.5px] text-white/40'>同行目的</p>
+          <p className='mt-1 text-[11.5px] leading-relaxed text-white/75'>{candidate.sharedPurposes.join('、') || '现场同行'}</p>
+        </div>
+        <div className='rounded-2xl border border-white/8 bg-white/[0.025] px-3 py-2'>
+          <p className='text-[10.5px] text-white/40'>交流与安全</p>
+          <p className='mt-1 text-[11.5px] leading-relaxed text-white/75'>{candidate.candidate.chatStyle} · {candidate.candidate.safety.slice(0, 1).join('')}</p>
+        </div>
       </div>
+      <Button className='mt-3' variant='secondary' full onClick={onHandshake}>查看 Agent 预沟通报告</Button>
 
       <div className='mt-2 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2'>
         <p className='text-[10.5px] text-white/40'>差异点</p>
@@ -304,12 +325,21 @@ function CandidateCard({
         </ul>
       </div>
 
-      {judgeMode ? (
-        <div className='mt-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5'>
-          <p className='mb-2 text-[11px] text-white/60'>得分构成（评委模式）</p>
+      <div className='mt-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5'>
+          <p className='mb-2 text-[11px] text-white/60'>综合匹配评分组成</p>
           <ScoreBars breakdown={candidate.scoreBreakdown} />
+      </div>
+
+      <div className='mt-3'>
+        <p className='mb-1.5 text-[10.5px] text-white/40'>已验证条件</p>
+        <div className='flex flex-wrap gap-1.5'>
+          {['同一场演出', '音乐偏好已核对', `同行目的：${candidate.sharedPurposes[0] ?? '现场同行'}`, '安全条件通过'].map((item) => (
+            <span key={item} className='rounded-pill border border-brand-500/25 bg-brand-500/[0.07] px-2 py-1 text-[10.5px] text-brand-100'>
+              {item}
+            </span>
+          ))}
         </div>
-      ) : null}
+      </div>
 
       <div className='mt-3 flex items-center gap-2'>
         <Button size='sm' variant='secondary' onClick={onEvidence}>
@@ -324,4 +354,9 @@ function CandidateCard({
       </div>
     </Card>
   )
+}
+
+function ReportBlock({ title, items, tone }: { title: string; items: string[]; tone: 'brand' | 'warn' | 'violet' | 'neutral' }) {
+  const color = tone === 'warn' ? 'text-warm-400' : tone === 'violet' ? 'text-violet-400' : tone === 'brand' ? 'text-brand-300' : 'text-white/65'
+  return <section><p className={`mb-2 text-sm font-semibold ${color}`}>{title}</p><div className='space-y-1.5'>{items.map((item) => <p key={item} className='rounded-xl border border-white/8 bg-white/[.025] px-3 py-2 text-sm leading-relaxed text-white/70'>{item}</p>)}</div></section>
 }

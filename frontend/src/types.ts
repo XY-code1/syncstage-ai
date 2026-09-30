@@ -445,4 +445,16 @@ export interface AgentState {
   provider: ProviderInfo | null
   createdAt: number
   updatedAt: number
+  handshakeReports?: Record<string, HandshakeReport>
+}
+
+export interface HandshakeReport {
+  candidateId: string
+  agreements: string[]
+  conflicts: string[]
+  needsHumanConfirmation: string[]
+  evidence: Array<{ field: string; value: string; source: string }>
+  hiddenFields: string[]
+  safetyResult: 'passed' | 'blocked'
+  exchangedFields: string[]
 }

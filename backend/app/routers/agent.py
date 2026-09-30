@@ -115,6 +115,13 @@ def read_session(session_id: str) -> dict:
     return _session_or_404(session_id).to_dict()
 
 
+@router.post('/sessions/{session_id}/destroy')
+def destroy_session(session_id: str) -> dict:
+    if not orch.get_orchestrator().destroy(session_id):
+        raise HTTPException(status_code=404, detail='这个 Agent 会话不存在或已销毁')
+    return {'destroyed': True, 'sessionId': session_id}
+
+
 @router.post('/sessions/{session_id}/invite')
 async def invite(session_id: str, payload: InviteRequest) -> dict:
     """发起方确认邀请对象：进入 pending_confirmation，此时还不能建房间。"""

@@ -104,7 +104,7 @@ export const DEMO_VIEWER = {
   profileLabel: '23 岁 · Demo 访客',
   age: 23,
   city: '上海',
-  headline: '第一次用同频现场，想找个人一起把副歌唱完',
+  headline: '第一次用一起去现场，想找个人一起把副歌唱完',
   likedSongs: ['夜航的信', '回声', '雨中电台', '别在夏天说再见'],
   likedArtists: ['星野回声', '短波电台', '潮汐线'],
   expectedTracks: ['夜航的信', '回声'],

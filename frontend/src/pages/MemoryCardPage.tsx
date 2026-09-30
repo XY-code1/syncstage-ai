@@ -33,7 +33,7 @@ export function MemoryCardPage() {
       '。'
     try {
       if (typeof navigator.share === 'function') {
-        await navigator.share({ title: '同频现场 · 现场回忆卡', text })
+        await navigator.share({ title: 'QQ音乐 · 共同回忆歌单', text })
         return
       }
       await navigator.clipboard.writeText(text)
@@ -45,8 +45,8 @@ export function MemoryCardPage() {
 
   return (
     <PageShell
-      title='现场回忆卡'
-      subtitle={memory ? memory.dateLabel + ' · ' + memory.venue : '正在整理这一晚的关键词'}
+      title='共同回忆歌单'
+      subtitle={memory ? memory.dateLabel + ' · ' + memory.venue : '正在整理这次共同抵达的音乐记忆'}
       step={6}
       onBack={() => navigate('/concert/' + concertId + '/room')}
       right={<DemoBadge />}
@@ -54,7 +54,7 @@ export function MemoryCardPage() {
         memory ? (
           <div className='flex flex-col gap-2'>
             <Button size='lg' full icon={<ShareIcon className='h-4 w-4' />} onClick={() => void share()}>
-              分享这张回忆卡
+              分享歌单回忆
             </Button>
             <Button
               variant='ghost'
@@ -63,10 +63,10 @@ export function MemoryCardPage() {
               icon={<CalendarIcon className='h-3.5 w-3.5' />}
               onClick={() => {
                 setSaved(true)
-                pushToast('已保存到你的现场记录', 'success')
+                pushToast('已模拟沉淀回 QQ 音乐歌单', 'success')
               }}
             >
-              {saved ? '已保存到现场记录' : '保存到我的现场记录'}
+              {saved ? '已沉淀到 QQ 音乐' : '沉淀回 QQ 音乐'}
             </Button>
           </div>
         ) : null
@@ -75,7 +75,7 @@ export function MemoryCardPage() {
       {!memory && memoryError ? (
         <StateView
           status='error'
-          title='回忆卡没能生成'
+          title='共同回忆歌单没能生成'
           description={memoryError}
           actionLabel='重新生成'
           onAction={() => {
@@ -92,7 +92,7 @@ export function MemoryCardPage() {
           <Card className='border-brand-500/25'>
             <p className='flex items-center gap-2 text-[13px] text-brand-200'>
               <span className='h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400' />
-              {memoryLoading ? '正在把这一晚整理成一张卡片' : '准备生成回忆卡'}
+              {memoryLoading ? '正在把共同歌曲整理成歌单' : '准备生成共同回忆歌单'}
             </p>
             <p className='mt-2 text-[11px] text-white/45'>共同歌曲、现场关键词和成员来自这次同频房间</p>
           </Card>
@@ -114,7 +114,7 @@ export function MemoryCardPage() {
             <div className='relative'>
               <div className='flex items-center justify-between'>
                 <span className='rounded-pill border border-brand-500/40 bg-brand-500/12 px-2.5 py-1 text-[10px] tracking-[0.16em] text-brand-100'>
-                  现场回忆卡
+                  共同回忆歌单
                 </span>
                 <span className='text-[11px] text-white/50'>{memory.dateLabel}</span>
               </div>
@@ -205,7 +205,7 @@ export function MemoryCardPage() {
           <Card>
             <SectionTitle
               title='这次同频的结果'
-              hint='散场后房间自动解散，回忆卡会留在你的现场记录里'
+              hint='散场后限时房间自动解散，共同歌曲可沉淀回 QQ 音乐'
               icon={<UsersIcon className='h-4 w-4 text-brand-400' />}
             />
             <div className='flex flex-col gap-1.5 text-[12px] text-white/60'>
@@ -225,7 +225,7 @@ export function MemoryCardPage() {
           </div>
 
           <p className='text-center text-[11px] leading-relaxed text-white/30'>
-            回忆卡内容由 Demo 数据生成，仅用于演示
+            初赛使用脱敏 Demo 数据模拟，未接入真实 QQ 音乐官方 API
           </p>
         </div>
       ) : null}

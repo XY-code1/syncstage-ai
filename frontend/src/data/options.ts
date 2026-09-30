@@ -3,7 +3,6 @@ import type { ChatStyle, Concert, GroupSize, MyGender, Purpose, SafetyPref } fro
 export const PURPOSE_OPTIONS: Array<{ value: Purpose; hint: string }> = [
   { value: '一起排队候场', hint: '开场前有人一起等，队伍没那么长' },
   { value: '副歌一起唱', hint: '想找敢在现场唱出来的人' },
-  { value: '演出后聊音乐', hint: '散场后找个地方把这场聊完' },
   { value: '安静听完整场', hint: '不需要说话，各自听歌也很好' },
   { value: '拍照记录现场', hint: '互相帮忙拍一张像样的现场照' },
 ]

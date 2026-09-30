@@ -312,7 +312,7 @@ DEMO_VIEWER: dict = {
     'age': 23,
     'profile_label': '23 岁 · Demo 访客',
     'city': '上海',
-    'headline': '第一次用同频现场，想找个人一起把副歌唱完',
+    'headline': '第一次用一起去现场，想找个人一起把副歌唱完',
     'liked_songs': ['夜航的信', '回声', '雨中电台', '别在夏天说再见'],
     'liked_artists': ['星野回声', '短波电台', '潮汐线'],
     'expected_tracks': ['夜航的信', '回声'],

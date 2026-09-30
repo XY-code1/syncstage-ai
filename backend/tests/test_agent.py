@@ -17,16 +17,19 @@ from app.main import app
 NORMAL_INTENT = '想找个安静一点的女生一起候场，最好同龄，一起把《夜航的信》的副歌唱完，散场后各自回家。'
 
 REQUIRED_TOOLS = {
-    'get_music_profile',
+    'get_authorized_music_profile',
     'get_event_context',
     'parse_social_intent',
-    'search_event_candidates',
+    'search_same_event_candidates',
     'apply_safety_constraints',
     'rank_candidates',
     'build_group',
     'generate_grounded_reason',
-    'create_room',
+    'send_mutual_consent_invitation',
+    'create_temporary_room',
     'collect_feedback',
+    'verify_same_event', 'compare_arrival_plan', 'compare_music_profile', 'compare_social_intent',
+    'negotiate_group_size', 'verify_safety_constraints', 'identify_conflicts', 'generate_handshake_report',
 }
 
 QUOTE_PATTERN = re.compile(r'《([^》]+)》|「([^」]+)」')
@@ -60,9 +63,9 @@ def test_agent_calls_at_least_five_tools_for_real() -> None:
     assert len(set(called)) == len(set(called))
     assert set(called) >= {
         'parse_social_intent',
-        'get_music_profile',
+        'get_authorized_music_profile',
         'get_event_context',
-        'search_event_candidates',
+        'search_same_event_candidates',
         'apply_safety_constraints',
         'rank_candidates',
     }
@@ -179,8 +182,29 @@ def test_room_requires_mutual_confirmation() -> None:
         body = created.json()
         assert body['roomId']
         assert body['status'] == 'room_created'
-        room_step = [item for item in body['trace'] if item['name'] == 'create_room'][-1]
+        room_step = [item for item in body['trace'] if item['name'] == 'create_temporary_room'][-1]
         assert '公开集合点' in room_step['outputSummary']
+
+
+def test_a2a_exchange_is_structured_and_contains_no_sensitive_fields() -> None:
+    with TestClient(app) as client:
+        state = _start(client, authorizedScopes=['favorite_songs'])
+    report = next(iter(state['handshakeReports'].values()))
+    assert set(report['exchangedFields']) == {'eventId', 'arrivalWindow', 'musicTags', 'socialIntent', 'groupSize', 'safetyConstraints'}
+    serialized = str(report['exchangedFields'])
+    assert all(value not in serialized for value in ('realName', 'phone', 'contact', 'exactLocation', 'rawListeningHistory'))
+    assert state['musicProfile']['recentTitles'] == []
+    assert state['musicProfile']['topArtists'] == []
+
+
+def test_differences_require_human_confirmation_and_destroy_revokes_data() -> None:
+    with TestClient(app) as client:
+        state = _start(client)
+        reports = state['handshakeReports'].values()
+        assert all(report['needsHumanConfirmation'] for report in reports)
+        session_id = state['sessionId']
+        assert client.post(f'/api/agent/sessions/{session_id}/destroy').json()['destroyed'] is True
+        assert client.get(f'/api/agent/sessions/{session_id}').status_code == 404
 
 
 def test_intent_parse_endpoint_returns_structured_intent() -> None:

@@ -46,6 +46,7 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -webkit-tap-highlight-color: transparent;
+    font-size: 14px;
   }
 
   button {
@@ -71,8 +72,7 @@
 
   .stage-surface {
     background:
-      radial-gradient(120% 60% at 12% 0%, rgba(49, 194, 124, 0.16), transparent 62%),
-      radial-gradient(90% 50% at 92% 8%, rgba(155, 140, 255, 0.14), transparent 60%),
+      radial-gradient(80% 42% at 50% -8%, rgba(49, 194, 124, 0.14), transparent 70%),
       linear-gradient(180deg, #0a0f14 0%, #05070a 100%);
   }
 
@@ -92,10 +92,17 @@
   }
 
   .glass-card {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(14px);
+    background: #10151b;
+    border: 1px solid rgba(255, 255, 255, 0.09);
   }
+
+  .ai-stage {
+    background: radial-gradient(80% 36% at 100% 0%, rgba(97, 200, 255, 0.12), transparent 65%), radial-gradient(70% 34% at 0% 8%, rgba(155, 140, 255, 0.14), transparent 68%), #080b10;
+  }
+
+  .signal-card { background: linear-gradient(135deg, rgba(155, 140, 255, 0.12), rgba(97, 200, 255, 0.06) 55%, #10151b); border: 1px solid rgba(155, 140, 255, 0.24); }
+  .signal-line { background: linear-gradient(90deg, #31c27c, #61c8ff 52%, #9b8cff); }
+  .showcase-grid { background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px); background-size: 28px 28px; }
 
   .brand-glow {
     box-shadow: 0 12px 34px -14px rgba(49, 194, 124, 0.75);

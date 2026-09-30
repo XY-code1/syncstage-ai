@@ -69,7 +69,7 @@ export function IntentConfirmPage() {
 
   return (
     <div className='flex min-h-screen flex-col'>
-      <QQMusicBar title='确认 Agent 的理解' subtitle='同频现场 · 下面每一项都可以改' onBack={() => navigate(`/concert/${concertId}/intent`)} right={<DemoBadge label='Agent 解析' />} />
+      <QQMusicBar title='确认 Agent 的理解' subtitle='一起去现场 · 下面每一项都可以改' onBack={() => navigate(`/concert/${concertId}/intent`)} right={<DemoBadge label='Agent 解析' />} />
 
       <main className='flex-1 px-4 pb-40 pt-4'>
         <div className='flex flex-col gap-5'>

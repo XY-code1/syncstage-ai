@@ -23,6 +23,7 @@ import type {
   ToolTrace,
 } from '../types'
 import { buildIcebreakers, buildRoomTasks } from './content'
+import { A2A_TOOLS, generateHandshakeReport } from './a2aNegotiation'
 import { QUALIFY_MIN_SCORE, checkHardConstraints, rankCandidates } from './scoring'
 import {
   ALL_SCOPES,
@@ -38,7 +39,7 @@ import {
 } from './tmeMock'
 
 export const AGENT_PHASES: Array<{ id: string; label: string; detail: string }> = [
-  { id: 'understand', label: '理解你的意图', detail: '把你的原话拆成活动、歌曲、目的和安全边界' },
+  { id: 'understand', label: '正在理解需求', detail: '把你的原话拆成活动、歌曲、目的和安全边界' },
   { id: 'profile', label: '读取授权音乐偏好', detail: '只读取你授权的那几类 QQ 音乐数据' },
   { id: 'search', label: '检索同场候选人', detail: '在这一场的观众里找人，不跨场推荐' },
   { id: 'safety', label: '执行安全约束', detail: '按你设的硬条件先筛一遍，不符合的直接排除' },
@@ -48,28 +49,35 @@ export const AGENT_PHASES: Array<{ id: string; label: string; detail: string }> 
 
 const PHASE_OF_TOOL: Record<string, string> = {
   parse_social_intent: 'understand',
-  get_music_profile: 'profile',
+  get_authorized_music_profile: 'profile',
   get_event_context: 'profile',
-  search_event_candidates: 'search',
+  search_same_event_candidates: 'search',
   apply_safety_constraints: 'safety',
   rank_candidates: 'rank',
   build_group: 'plan',
   generate_grounded_reason: 'plan',
-  create_room: 'plan',
+  send_mutual_consent_invitation: 'plan',
+  create_temporary_room: 'plan',
   collect_feedback: 'plan',
+  verify_same_event: 'search', compare_arrival_plan: 'rank', compare_music_profile: 'rank', compare_social_intent: 'rank',
+  negotiate_group_size: 'plan', verify_safety_constraints: 'safety', identify_conflicts: 'safety', generate_handshake_report: 'plan',
 }
 
 const TOOL_LABELS: Record<string, string> = {
   parse_social_intent: '解析自然语言需求',
-  get_music_profile: '读取授权音乐画像',
+  get_authorized_music_profile: '读取授权音乐画像',
   get_event_context: '读取演出上下文',
-  search_event_candidates: '检索同场候选人',
+  search_same_event_candidates: '检索同场候选人',
   apply_safety_constraints: '执行安全硬约束',
   rank_candidates: '计算同频程度',
   build_group: '生成组队方案',
   generate_grounded_reason: '生成有证据的理由',
-  create_room: '创建临时房间',
+  send_mutual_consent_invitation: '发送双向确认邀请',
+  create_temporary_room: '创建临时房间',
   collect_feedback: '收集反馈',
+  verify_same_event: '核验同场演出', compare_arrival_plan: '对比到场计划', compare_music_profile: '对比音乐画像',
+  compare_social_intent: '对比同行意图', negotiate_group_size: '协商组队人数', verify_safety_constraints: '核验安全边界',
+  identify_conflicts: '识别冲突条件', generate_handshake_report: '生成预沟通报告',
 }
 
 export function toolLabel(name: string): string {
@@ -293,7 +301,7 @@ export async function runAgent(args: RunArgs): Promise<AgentState> {
   // 2. 读取授权音乐画像
   const profile = viewer
   await record(
-    'get_music_profile',
+    'get_authorized_music_profile',
     `user_id=${social.userId}，授权范围=${scopes.map((scope) => scope).join('、') || '无'}`,
     `读取到脱敏音乐画像：收藏 ${profile.favoriteTitles.length} 首 · 常听歌手 ${profile.topArtists.length} 位`
       + ` · 近期播放 ${profile.recentTitles.length} 条 · 关注演出 ${profile.followedEventIds.length} 场`
@@ -325,7 +333,7 @@ export async function runAgent(args: RunArgs): Promise<AgentState> {
     .filter((item): item is CandidateFacts => Boolean(item))
   state.candidateIds = pool.map((item) => item.userId)
   await record(
-    'search_event_candidates',
+    'search_same_event_candidates',
     `event_id=${eventId}，同场观众 ${attendeesOf(eventId).length} 人`,
     `同场候选池 ${pool.length} 人：${pool.slice(0, 4).map((item) => item.nickname).join('、')}${pool.length > 4 ? '…' : ''}`,
     { cost: 520 },
@@ -382,6 +390,10 @@ export async function runAgent(args: RunArgs): Promise<AgentState> {
   // 6. 计算同频程度
   const ranked = rankCandidates(viewer, intent, kept)
   state.rankedCandidates = ranked
+  state.handshakeReports = Object.fromEntries(ranked.map((item) => [item.userId, generateHandshakeReport(state, item)]))
+  for (const name of A2A_TOOLS) {
+    await record(name, '仅交换匿名结构字段', `${name} 完成；未交换真实姓名、联系方式、精确位置或原始听歌历史`, { cost: 70 })
+  }
   const evidence: Array<MatchEvidence & { userId?: string; nickname?: string }> = []
   const seen = new Set<string>()
   for (const item of ranked) {
@@ -519,7 +531,19 @@ export function inviteState(state: AgentState, candidateId: string): AgentState 
     reason: '需要双方都确认后才创建临时房间',
     nextAction: 'wait_peer',
   }
-  return { ...state, pendingConfirmation: pending, status: 'pending_confirmation', updatedAt: Date.now() }
+  const step: ToolTrace = {
+    name: 'send_mutual_consent_invitation',
+    label: toolLabel('send_mutual_consent_invitation'),
+    phase: 'plan',
+    status: 'ok',
+    inputSummary: `candidate=${candidateId}`,
+    outputSummary: '邀请已发送，等待对方确认；确认前不会创建房间',
+    durationMs: 180,
+    usedFallback: false,
+    error: '',
+  }
+  const trace = [...state.trace, step]
+  return { ...state, pendingConfirmation: pending, status: 'pending_confirmation', trace, phases: phasesOf(trace), updatedAt: Date.now() }
 }
 
 export function peerConfirmState(state: AgentState, accept: boolean): AgentState {
@@ -531,7 +555,7 @@ export function peerConfirmState(state: AgentState, accept: boolean): AgentState
       ...pending,
       peerConfirmed: accept,
       status: accept ? 'both_confirmed' : 'declined',
-      nextAction: accept ? 'create_room' : 'back_to_matches',
+      nextAction: accept ? 'create_temporary_room' : 'back_to_matches',
       reason: accept ? '双方都已确认，Agent 可以创建临时房间了' : '对方暂时不方便，换一个人试试',
     },
     updatedAt: Date.now(),
@@ -541,8 +565,8 @@ export function peerConfirmState(state: AgentState, accept: boolean): AgentState
 export function createRoomState(state: AgentState): { state: AgentState; room: RoomState | null; trace: ToolTrace } {
   const pending = state.pendingConfirmation
   const trace: ToolTrace = {
-    name: 'create_room',
-    label: toolLabel('create_room'),
+    name: 'create_temporary_room',
+    label: toolLabel('create_temporary_room'),
     phase: 'plan',
     status: 'ok',
     inputSummary: `partner=${pending.candidateId ?? '未指定'}，双方均已确认`,
@@ -663,3 +687,4 @@ export function feedbackState(state: AgentState, rating: string, tags: string[],
 }
 
 export type { ScoreBreakdown }
+

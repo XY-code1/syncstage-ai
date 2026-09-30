@@ -19,7 +19,7 @@ import { messageOf, useSession } from '../store/session'
 import { ALL_SCOPES } from '../lib/tmeMock'
 import type { Concert } from '../types'
 
-const AGENT_FLOW = ['音乐数据授权', '说出你的需求', '确认 Agent 理解', '查看匹配与证据', '双方确认后进房间']
+const AGENT_FLOW = ['授权 QQ 音乐画像', '说出同行需求', 'Agent 检索与排序', '查看音乐证据', '双方确认后进房间']
 
 export function ConcertDetailPage() {
   const { concertId = 'night-flight' } = useParams()
@@ -46,7 +46,7 @@ export function ConcertDetailPage() {
     void load()
   }, [load])
 
-  const entryLabel = agent ? '回到我的同频方案' : authorized ? '继续 AI 找同频搭子' : 'AI 找同频搭子'
+  const entryLabel = agent ? '回到同行方案' : authorized ? '继续 AI找同行' : 'AI找同行'
   const entryTarget = agent ? `/concert/${concertId}/matches` : authorized ? `/concert/${concertId}/intent` : `/concert/${concertId}/authorize`
 
   const metaRows = concert
@@ -118,7 +118,7 @@ export function ConcertDetailPage() {
                   ))}
                 </div>
                 <p className='text-[12px] text-white/55'>
-                  已有 <span className='text-brand-300'>{concert.attendeeCount}</span> 位观众标记了同频意愿
+                  已有 <span className='font-semibold text-brand-300'>128</span> 位同场听众开启匹配
                 </p>
               </div>
             </div>
@@ -131,14 +131,13 @@ export function ConcertDetailPage() {
                 </span>
                 <div className='min-w-0 flex-1'>
                   <div className='flex items-center gap-2'>
-                    <p className='text-[15px] font-semibold text-white'>AI 找同频搭子</p>
+                    <p className='text-base font-semibold text-white'>QQ音乐「一起去现场」</p>
                     <span className='rounded-pill border border-brand-500/40 bg-brand-500/12 px-2 py-[1px] text-[10px] text-brand-200'>
-                      Agent
+                      面向独自观演用户的 AI 同行组队 Agent
                     </span>
                   </div>
-                  <p className='mt-1.5 text-[12px] leading-relaxed text-white/60'>
-                    授权你的音乐偏好，用一句话说清楚想找什么样的人。Agent 会自己调用音乐画像、同场检索、安全过滤、
-                    排序与组队工具，最后给出<span className='text-brand-200'>带证据</span>的匹配理由。
+                  <p className='mt-1.5 text-sm leading-relaxed text-white/65'>
+                    AI同频同行助手 · 在开场之前，找到和你同频的人。授权模拟音乐画像，Agent 会调用同场检索、安全过滤、排序与解释工具，给出<span className='text-brand-200'>可追溯到音乐数据</span>的理由。
                   </p>
                   <div className='mt-3 flex flex-wrap gap-1.5'>
                     {AGENT_FLOW.map((step, index) => (

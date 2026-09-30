@@ -26,7 +26,7 @@ function StepRow({ step, judgeMode }: { step: ToolTrace; judgeMode: boolean }) {
         >
           {failed ? <AlertIcon className='h-2.5 w-2.5' /> : <CheckIcon className='h-2.5 w-2.5' />}
         </span>
-        <span className='truncate text-[12px] text-white/80'>{judgeMode ? step.label : step.outputSummary.slice(0, 28)}</span>
+        <span className='truncate text-[12px] text-white/80'>{step.label}</span>
         {step.usedFallback ? (
           <span className='ml-auto shrink-0 rounded-pill border border-warm-400/40 bg-warm-400/12 px-1.5 py-[1px] text-[10px] text-warm-400'>
             fallback
@@ -34,14 +34,12 @@ function StepRow({ step, judgeMode }: { step: ToolTrace; judgeMode: boolean }) {
         ) : null}
         {judgeMode ? <span className='ml-auto shrink-0 text-[10px] text-white/35'>{step.durationMs} ms</span> : null}
       </div>
-      {judgeMode ? (
-        <div className='mt-2 flex flex-col gap-1 border-t border-white/6 pt-2'>
-          <p className='text-[10px] text-white/35'>工具：{step.name} · 阶段：{step.phase}</p>
-          <p className='text-[11px] leading-relaxed text-white/50'>输入：{step.inputSummary}</p>
-          <p className='text-[11px] leading-relaxed text-white/65'>输出：{step.outputSummary}</p>
+      <div className='mt-2 flex flex-col gap-1 border-t border-white/6 pt-2'>
+          <p className='text-[10px] text-white/35'>调用工具：{step.name} · 阶段：{step.phase}</p>
+          {judgeMode ? <p className='text-[11px] leading-relaxed text-white/50'>输入：{step.inputSummary}</p> : null}
+          <p className='text-[11px] leading-relaxed text-white/65'>结果：{step.outputSummary}</p>
           {failed ? <p className='text-[11px] text-rose-300'>错误：{step.error}</p> : null}
-        </div>
-      ) : null}
+      </div>
     </div>
   )
 }
@@ -77,8 +75,8 @@ export function AgentProgressPage() {
     <div className='flex min-h-screen flex-col'>
       <QQMusicBar
         title='Agent 正在匹配'
-        subtitle='同频现场 · 六步自动完成'
-        onBack={() => navigate(`/concert/${concertId}/intent/confirm`)}
+        subtitle='一起去现场 · 五类工具协同完成'
+        onBack={() => navigate(`/concert/${concertId}/intent`)}
         right={judgeMode ? <DemoBadge label='评委模式' /> : undefined}
       />
 
@@ -102,7 +100,9 @@ export function AgentProgressPage() {
             </div>
           </Card>
 
-          <div className='flex flex-col gap-3'>
+          <div>
+            <SectionTitle title='Agent 任务计划' hint='每一步都会展示调用工具与处理结果' />
+            <div className='flex flex-col gap-3'>
             {AGENT_PHASES.map((phase, index) => {
               const view = phases[index]
               const state = view?.state ?? 'pending'
@@ -139,6 +139,7 @@ export function AgentProgressPage() {
                 </div>
               )
             })}
+            </div>
           </div>
 
           {agent?.status === 'no_match' ? (
@@ -155,7 +156,7 @@ export function AgentProgressPage() {
               <p className='mt-3 text-[11px] leading-relaxed text-white/45'>
                 Agent 不会为了凑人数而放宽你的安全条件，也不会编造候选人。你可以放宽某一条硬条件后重新匹配。
               </p>
-              <Button className='mt-3' size='sm' variant='secondary' full onClick={() => navigate(`/concert/${concertId}/intent/confirm`)}>
+              <Button className='mt-3' size='sm' variant='secondary' full onClick={() => navigate(`/concert/${concertId}/intent`)}>
                 去放宽条件
               </Button>
             </Card>

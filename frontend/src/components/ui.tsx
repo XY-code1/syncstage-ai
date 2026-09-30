@@ -14,7 +14,7 @@ const variantClass: Record<ButtonVariant, string> = {
 }
 
 const sizeClass: Record<ButtonSize, string> = {
-  sm: 'h-9 px-3 gap-1.5 text-[13px] rounded-xl',
+  sm: 'min-h-11 px-3 gap-1.5 text-sm rounded-xl',
   md: 'h-11 px-4 gap-2 text-sm rounded-2xl',
   lg: 'h-[52px] px-5 gap-2 text-[15px] rounded-2xl',
 }
@@ -131,7 +131,7 @@ export function Chip({
       onClick={onClick}
       className={cn(
         'inline-flex items-center gap-1 rounded-pill border transition duration-150 active:scale-[0.97]',
-        size === 'sm' ? 'px-2.5 py-1 text-xs' : 'px-3.5 py-2 text-[13px]',
+        size === 'sm' ? 'min-h-8 px-2.5 py-1 text-sm' : 'min-h-10 px-3.5 py-2 text-sm',
         selected
           ? toneSelected[tone]
           : 'border-white/12 bg-white/[0.03] text-white/65 hover:border-white/25 hover:text-white/85',
@@ -331,7 +331,7 @@ export function Sheet({
   )
 }
 
-const FLOW_STEPS = ['授权', '需求', '确认', '进度', '结果', '房间', '回忆']
+const FLOW_STEPS = ['授权', '需求确认', '执行', '结果邀请', '房间']
 
 export function ProgressSteps({ current }: { current: number }) {
   return (

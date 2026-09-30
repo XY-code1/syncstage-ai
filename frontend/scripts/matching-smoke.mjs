@@ -1,4 +1,4 @@
-// 同频现场 · 匹配逻辑与 Agent 流水线冒烟测试（开发用脚本，不参与打包）
+// SyncStage · 匹配逻辑与 Agent 流水线冒烟测试（开发用脚本，不参与打包）
 // 用法：npm run smoke
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -40,7 +40,7 @@ try {
     pathToFileURL(join(outdir, 'matching.js')).href
   )
   const { demoConcerts, demoUsers } = await import(pathToFileURL(join(outdir, 'demoData.js')).href)
-  const { runAgent, createRoomState, inviteState, peerConfirmState, unsupportedQuotes } = await import(
+  const { runAgent, ruleParseIntent, createRoomState, inviteState, peerConfirmState, unsupportedQuotes } = await import(
     pathToFileURL(join(outdir, 'agentMock.js')).href
   )
   const { DIMENSION_WEIGHTS } = await import(pathToFileURL(join(outdir, 'scoring.js')).href)
@@ -205,6 +205,18 @@ try {
   console.log('  正常匹配：状态 ' + normal.status + '，工具调用 ' + normal.trace.length + ' 次 / ' + distinctTools.size + ' 个不同工具')
   check(distinctTools.size >= 5, 'Agent 至少真实调用 5 个工具（当前 ' + distinctTools.size + ' 个）')
   check(normal.status === 'pending_confirmation', '正常匹配进入 pending_confirmation 等待双方确认')
+  const intentA = ruleParseIntent('想找两个安静听歌的人，只在公开场合见面', 'night-flight', 'female', '18-22')
+  const intentB = ruleParseIntent('想找三个人一起排队和唱副歌，交流热情一点', 'night-flight', 'female', '18-22')
+  check(JSON.stringify(intentA) !== JSON.stringify(intentB), '不同自然语言需求产生不同结构化意图')
+  const limited = await runAgent({
+    eventId: 'night-flight', userId: 'u-viewer', text: INTENT_TEXT,
+    scopes: ['followed_events'], demoCase: 'normal', scenario: 'normal',
+  })
+  check(
+    limited.musicProfile.favoriteTracks.length === 0 && limited.musicProfile.topArtists.length === 0
+      && normal.musicProfile.favoriteTracks.length > 0,
+    '不同授权范围影响 Agent 可用证据',
+  )
   check(normal.rankedCandidates.length > 0, '返回了候选人')
   check(normal.rankedCandidates[0].score >= 60, '首位候选人同频分不低于 60（当前 ' + normal.rankedCandidates[0].score + '）')
   check(
@@ -248,8 +260,8 @@ try {
   check(created.room.icebreakers.length >= 1, '房间带音乐破冰话题')
   check(Boolean(created.room.meetingPoint && created.room.meetingPoint.name), '房间给出公开集合点')
   check(
-    created.state.trace.some((step) => step.name === 'create_room' && step.status === 'ok'),
-    'create_room 工具被真实调用并成功',
+    created.state.trace.some((step) => step.name === 'create_temporary_room' && step.status === 'ok'),
+    'create_temporary_room 工具被真实调用并成功',
   )
 
   const declined = createRoomState(peerConfirmState(invited, false))
@@ -266,3 +278,4 @@ if (failures > 0) {
   console.log('')
   console.log('全部检查通过')
 }
+
