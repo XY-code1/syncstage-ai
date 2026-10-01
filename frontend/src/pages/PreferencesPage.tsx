@@ -82,7 +82,7 @@ export function PreferencesPage() {
       return
     }
     savePrefs({ ...form, story: form.story.trim() })
-    navigate(`/concert/${concertId}/intent`)
+    navigate(`/concert/${concertId}/task`)
   }
 
   const addCustomSong = () => {
@@ -99,7 +99,7 @@ export function PreferencesPage() {
     <PageShell
       title='填写同频偏好'
       subtitle={concert ? `${concert.title} · ${concert.dateLabel}` : '正在读取演出信息'}
-      step={1}
+      step={0}
       onBack={() => navigate(`/concert/${concertId}`)}
       footer={
         status === 'ready' ? (

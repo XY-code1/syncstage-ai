@@ -11,6 +11,7 @@ export function PageShell({
   children,
   footer,
   hideHeader,
+  footerFixed,
 }: {
   title: string
   subtitle?: string
@@ -20,6 +21,7 @@ export function PageShell({
   children: ReactNode
   footer?: ReactNode
   hideHeader?: boolean
+  footerFixed?: boolean
 }) {
   return (
     <div className='ai-stage flex min-h-screen flex-col'>
@@ -50,10 +52,10 @@ export function PageShell({
         </header>
       )}
 
-      <main className={footer ? 'flex-1 px-4 pb-6 pt-4' : 'flex-1 px-4 pb-14 pt-4'}>{children}</main>
+      <main className={footer ? (footerFixed ? 'flex-1 px-4 pb-36 pt-4' : 'flex-1 px-4 pb-6 pt-4') : 'flex-1 px-4 pb-14 pt-4'}>{children}</main>
 
       {footer ? (
-        <footer className='safe-bottom sticky bottom-0 z-30 border-t border-white/8 bg-stage-950/92 px-4 pt-3 backdrop-blur-xl'>
+        <footer className={footerFixed ? 'safe-bottom fixed bottom-0 left-1/2 z-30 w-full max-w-[390px] -translate-x-1/2 border-t border-white/8 bg-stage-950/96 px-4 pt-3 backdrop-blur-xl' : 'safe-bottom sticky bottom-0 z-30 border-t border-white/8 bg-stage-950/92 px-4 pt-3 backdrop-blur-xl'}>
           {footer}
         </footer>
       ) : null}

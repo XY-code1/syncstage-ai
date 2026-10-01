@@ -6,7 +6,9 @@
 
 from fastapi.testclient import TestClient
 
+from app.config import Settings
 from app.main import app
+from app.routers import health as health_router
 
 PREFS = {
     'likedSongs': ['夜航的信', '回声', '下午四点的海'],
@@ -21,14 +23,16 @@ PREFS = {
 }
 
 
-def test_health_reports_demo_mode() -> None:
+def test_health_reports_demo_mode(monkeypatch) -> None:
+    # 显式构造"未配置模型"的状态，避免依赖本机 .env
+    monkeypatch.setattr(health_router, 'settings', Settings(openai_model='', openai_api_key=''))
     with TestClient(app) as client:
         response = client.get('/api/health')
     assert response.status_code == 200
     payload = response.json()
     assert payload['status'] == 'ok'
     assert payload['demoData'] is True
-    assert payload['aiEnabled'] is False  # 未配置 Key 时自动回退规则
+    assert payload['aiEnabled'] is False  # 未配置模型时明确回退到规则
     assert 'Demo 演示数据' in payload['notice']
 
 

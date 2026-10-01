@@ -34,3 +34,22 @@ class FeedbackRequest(BaseModel):
     rating: str = 'ok'
     tags: list[str] = Field(default_factory=list)
     comment: str = ''
+
+
+class ChatTurn(BaseModel):
+    """会话历史里的单条消息（只保留用户与 Agent 两种角色）。"""
+
+    role: str = 'user'
+    content: str = ''
+
+
+class ChatRequest(BaseModel):
+    """ChatRoom 的对话请求：前端把会话历史与真实上下文一起带上。"""
+
+    threadId: str = ''
+    threadKind: str = 'agent'
+    concertId: str = 'night-flight'
+    roomId: str | None = None
+    peerName: str | None = None
+    userId: str = 'u-viewer'
+    messages: list[ChatTurn] = Field(default_factory=list)

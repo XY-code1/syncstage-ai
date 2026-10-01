@@ -47,7 +47,7 @@ export function MemoryCardPage() {
     <PageShell
       title='共同回忆歌单'
       subtitle={memory ? memory.dateLabel + ' · ' + memory.venue : '正在整理这次共同抵达的音乐记忆'}
-      step={6}
+      step={3}
       onBack={() => navigate('/concert/' + concertId + '/room')}
       right={<DemoBadge />}
       footer={

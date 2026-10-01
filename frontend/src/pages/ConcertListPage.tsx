@@ -1,33 +1,25 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { QQMusicBar } from '../components/QQMusicBar'
+import { Sheet, Skeleton, StateView } from '../components/ui'
+import { CalendarIcon, MapPinIcon, UsersIcon } from '../components/icons'
 import { fetchConcerts } from '../lib/api'
 import { messageOf, useSession } from '../store/session'
 import type { Concert } from '../types'
-import { Avatar } from '../components/Avatar'
-import { Poster } from '../components/Poster'
-import { Button, Card, DemoBadge, SectionTitle, Skeleton, StateView } from '../components/ui'
-import { CalendarIcon, MapPinIcon, MusicIcon, ShieldIcon, SparkleIcon, UsersIcon } from '../components/icons'
 
-const FLOW = [
-  { title: '填写偏好', detail: '喜欢哪首歌、想找什么样的同行者' },
-  { title: '确认标签', detail: '把你说的话整理成可以匹配的标签' },
-  { title: '查看匹配', detail: '3 位候选人，附上具体的匹配理由' },
-  { title: '双向确认', detail: '双方都按下确认，房间才会生成' },
-  { title: '建立同行房间', detail: '双方确认后进入候场协作' },
-]
-
+/** 二级页面：全部演出。首页只放最近两场，完整清单放在这里。 */
 export function ConcertListPage() {
   const navigate = useNavigate()
   const { selectConcert, room, concertId } = useSession()
   const [concerts, setConcerts] = useState<Concert[]>([])
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState('')
+  const [infoOpen, setInfoOpen] = useState(false)
 
   const load = useCallback(async () => {
     setStatus('loading')
     try {
-      const data = await fetchConcerts()
-      setConcerts(data)
+      setConcerts(await fetchConcerts())
       setStatus('ready')
     } catch (err) {
       setError(messageOf(err))
@@ -39,77 +31,43 @@ export function ConcertListPage() {
     void load()
   }, [load])
 
-  const openConcert = (id: string) => {
-    selectConcert(id)
-    navigate(`/concert/${id}`)
-  }
-
   return (
     <div className='flex min-h-screen flex-col'>
-      <header className='safe-top px-4 pb-2 pt-6'>
-        <div className='flex items-center justify-between'>
-          <div className='flex items-center gap-2'>
-            <span className='flex h-8 w-8 items-center justify-center rounded-xl bg-brand-500/15 text-brand-400'>
-              <MusicIcon className='h-4 w-4' />
-            </span>
-            <span className='text-[15px] font-semibold text-white'>QQ音乐 · 演出</span>
-          </div>
-          <DemoBadge />
-        </div>
+      <QQMusicBar
+        title='演出'
+        subtitle='选择一场演出，开始一次安全组队'
+        onBack={() => navigate(-1)}
+        right={
+          <button type='button' onClick={() => setInfoOpen(true)} className='min-h-11 px-1 text-[12px] text-white/55'>
+            说明
+          </button>
+        }
+      />
 
-        <h1 className='mt-5 text-[26px] font-semibold leading-snug text-white'>
-          一起去现场，
-          <br />
-          和同频的人共同抵达。
-        </h1>
-        <p className='mt-3 text-[13px] leading-relaxed text-white/55'>
-          这是 QQ音乐演出页的概念功能入口。基于已授权的模拟音乐画像与安全偏好，匹配同场同行者；
-          每一条理由都能回到具体歌曲、歌手或歌单标签。
-        </p>
-
-        <div className='mt-4 flex flex-wrap gap-1.5'>
-          {['音乐口味', '演出期待', '社交意愿', '安全边界'].map((item) => (
-            <span
-              key={item}
-              className='rounded-pill border border-brand-500/25 bg-brand-500/10 px-2.5 py-1 text-[11px] text-brand-200'
-            >
-              {item}
-            </span>
-          ))}
-        </div>
-      </header>
-
-      <main className='flex-1 px-4 pb-14 pt-5'>
+      <main className='flex-1 px-4 pb-8 pt-4'>
         {room && concertId ? (
-          <Card className='mb-5 border-brand-500/35 bg-brand-500/8'>
-            <div className='flex items-center justify-between gap-3'>
-              <div>
-                <p className='text-[13px] text-brand-100'>你还有一个进行中的同频房间</p>
-                <p className='mt-1 text-[11px] text-white/50'>
-                  {room.members.length} 位成员 · 已确认集合点：{room.meetingConfirmed ? '是' : '还没确认'}
-                </p>
-              </div>
-              <Button size='sm' onClick={() => navigate(`/concert/${concertId}/room`)}>
-                回到房间
-              </Button>
-            </div>
-          </Card>
+          <button
+            type='button'
+            onClick={() => navigate(`/concert/${concertId}/room`)}
+            className='soft-card mb-3 flex w-full items-center gap-3 p-3 text-left'
+          >
+            <span className='flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-brand-500/12 text-brand-300'>
+              <UsersIcon className='h-5 w-5' />
+            </span>
+            <span className='min-w-0 flex-1'>
+              <span className='block truncate text-[12.5px] font-semibold text-white'>{room.concertTitle}</span>
+              <span className='block text-[10.5px] text-white/45'>临时同频房间进行中</span>
+            </span>
+            <span className='flex h-8 shrink-0 items-center rounded-xl bg-brand-500 px-3 text-[11.5px] font-semibold text-stage-950'>
+              继续
+            </span>
+          </button>
         ) : null}
 
-        <SectionTitle
-          title='近期演出'
-          hint='以下演出、艺人、场地均为虚构的 Demo 数据'
-          icon={<SparkleIcon className='h-4 w-4 text-brand-400' />}
-        />
-
         {status === 'loading' ? (
-          <div className='flex flex-col gap-4'>
-            {[0, 1, 2].map((index) => (
-              <div key={index} className='glass-card rounded-card p-3'>
-                <Skeleton className='aspect-[16/9] w-full' />
-                <Skeleton className='mt-3 h-4 w-2/3' />
-                <Skeleton className='mt-2 h-3 w-1/2' />
-              </div>
+          <div className='flex flex-col gap-2.5'>
+            {[0, 1, 2].map((key) => (
+              <Skeleton key={key} className='h-[78px] w-full' />
             ))}
           </div>
         ) : null}
@@ -117,111 +75,74 @@ export function ConcertListPage() {
         {status === 'error' ? (
           <StateView
             status='error'
-            title='演出列表加载失败'
+            title='演出加载失败'
             description={error}
             actionLabel='重新加载'
             onAction={() => void load()}
           />
         ) : null}
 
-        {status === 'ready' && concerts.length === 0 ? (
-          <StateView status='empty' title='近期还没有可预约的演出' description='换个时间再来看看。' />
-        ) : null}
+        {status === 'ready' && concerts.length === 0 ? <StateView status='empty' title='近期没有演出' /> : null}
 
         {status === 'ready' && concerts.length > 0 ? (
-          <div className='flex flex-col gap-4'>
+          <div className='flex flex-col gap-2.5'>
             {concerts.map((concert) => (
-              <div key={concert.id} className='glass-card animate-rise overflow-hidden rounded-card p-3'>
-                <Poster concert={concert} size='mini' />
-                <div className='px-1 pb-1 pt-3'>
-                  <div className='flex items-center justify-between gap-2'>
-                    <p className='text-[15px] font-semibold text-white'>{concert.title}</p>
-                    <span className='rounded-pill border border-brand-500/30 bg-brand-500/12 px-2 py-0.5 text-[10px] text-brand-200'>
-                      {concert.ticketStatus}
-                    </span>
-                  </div>
-                  <p className='mt-1 text-[12px] text-white/50'>{concert.artistNote}</p>
-
-                  <div className='mt-3 flex flex-col gap-1.5 text-[12px] text-white/60'>
-                    <span className='flex items-center gap-1.5'>
-                      <CalendarIcon className='h-3.5 w-3.5 text-brand-400' />
+              <button
+                key={concert.id}
+                type='button'
+                onClick={() => {
+                  selectConcert(concert.id)
+                  navigate(`/concert/${concert.id}`)
+                }}
+                className='soft-card flex items-center gap-3 p-3 text-left'
+              >
+                <span
+                  className='h-[56px] w-[56px] shrink-0 rounded-xl'
+                  style={{
+                    background: `linear-gradient(150deg, ${concert.poster.from}, ${concert.poster.via} 55%, ${concert.poster.to})`,
+                  }}
+                />
+                <span className='min-w-0 flex-1'>
+                  <span className='block truncate text-[13.5px] font-semibold text-white'>{concert.title}</span>
+                  <span className='block truncate text-[11px] text-white/45'>{concert.artist}</span>
+                  <span className='mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10.5px] text-white/35'>
+                    <span className='flex items-center gap-1'>
+                      <CalendarIcon className='h-3 w-3' />
                       {concert.dateLabel}
                     </span>
-                    <span className='flex items-center gap-1.5'>
-                      <MapPinIcon className='h-3.5 w-3.5 text-brand-400' />
-                      {concert.city} · {concert.venue}
+                    <span className='flex items-center gap-1'>
+                      <MapPinIcon className='h-3 w-3' />
+                      {concert.city}
                     </span>
-                  </div>
-
-                  <div className='mt-3 flex items-center justify-between'>
-                    <div className='flex items-center gap-1.5'>
-                      <div className='flex -space-x-2'>
-                        {['#31c27c', '#61c8ff', '#ffc46b'].map((color, index) => (
-                          <Avatar
-                            key={color}
-                            name={`同${index}`}
-                            from={color}
-                            to='#0b1116'
-                            size={22}
-                            className='border border-stage-900'
-                          />
-                        ))}
-                      </div>
-                      <span className='text-[11px] text-white/45'>{concert.attendeeCount} 人已标记同频</span>
-                    </div>
-                    <Button size='sm' onClick={() => openConcert(concert.id)}>
-                      看看这场
-                    </Button>
-                  </div>
-                </div>
-              </div>
+                    <span className='flex items-center gap-1 text-brand-300/80'>
+                      <UsersIcon className='h-3 w-3' />
+                      {concert.attendeeCount} 人
+                    </span>
+                  </span>
+                </span>
+                <span className='shrink-0 rounded-pill border border-white/10 px-2 py-0.5 text-[10px] text-white/45'>
+                  {concert.ticketStatus}
+                </span>
+              </button>
             ))}
           </div>
         ) : null}
-
-        <div className='mt-6'>
-          <SectionTitle title='一次同行是怎么发生的' hint='从音乐授权到建立同行房间，一共五步' />
-          <Card className='p-0'>
-            {FLOW.map((item, index) => (
-              <div
-                key={item.title}
-                className='flex items-start gap-3 border-b border-white/6 px-4 py-3.5 last:border-b-0'
-              >
-                <span className='mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-[11px] font-semibold text-brand-300'>
-                  {index + 1}
-                </span>
-                <div>
-                  <p className='text-[13px] text-white/90'>{item.title}</p>
-                  <p className='mt-0.5 text-[11px] text-white/45'>{item.detail}</p>
-                </div>
-              </div>
-            ))}
-          </Card>
-        </div>
-
-        <div className='mt-6'>
-          <SectionTitle title='安全与边界' hint='所有同频都建立在公开、可退出的前提下' />
-          <div className='flex flex-col gap-2.5'>
-            {[
-              { icon: <ShieldIcon className='h-4 w-4 text-brand-400' />, text: '集合点只推荐灯光明亮的公共区域，不涉及任何私人空间' },
-              { icon: <UsersIcon className='h-4 w-4 text-brand-400' />, text: '双方确认后才会生成临时房间，任何一方随时可以退出' },
-              { icon: <MusicIcon className='h-4 w-4 text-brand-400' />, text: '不做精确位置共享，不涉及登录、支付与真实票务' },
-            ].map((item) => (
-              <div key={item.text} className='flex items-start gap-2.5 rounded-2xl border border-white/8 bg-white/[0.025] px-3.5 py-3'>
-                <span className='mt-0.5'>{item.icon}</span>
-                <p className='text-[12px] leading-relaxed text-white/60'>{item.text}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <p className='mt-6 text-center text-[11px] leading-relaxed text-white/30'>
-          本页面为腾讯音乐高校 AI Hackathon 参赛作品 Demo
-          <br />
-          所有演出、艺人、用户与互动内容均为虚构，与真实演出及真实用户无关
-        </p>
       </main>
+
+      <Sheet
+        open={infoOpen}
+        onClose={() => setInfoOpen(false)}
+        title='一起去现场'
+        description='QQ音乐演出场景下的 AI 同频同行助手'
+      >
+        <div className='space-y-3 text-[12px] leading-relaxed text-white/65'>
+          <p>选择演出后，授权脱敏音乐画像，给同行 Agent 一个任务；Agent 会检索同场候选人、执行安全过滤并生成可核验的理由。</p>
+          <p>Agent 之间只交换匿名结构化条件；双方真人确认后，才会创建限时临时房间。</p>
+          <p className='rounded-xl border border-warm-400/20 bg-warm-400/[0.06] p-3 text-warm-400'>
+            本作品为参赛概念 Demo，当前使用模拟数据，未调用 QQ 音乐官方内部 API。
+          </p>
+        </div>
+      </Sheet>
     </div>
   )
 }
-

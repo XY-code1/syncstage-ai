@@ -9,10 +9,20 @@ import {
   peerConfirmAgent,
   resolveDataMode,
   setDemoScenario,
-  startAgent,
   submitReport,
 } from '../lib/api'
+import { newAgentRunId, runAgentTask } from '../services/agent/agentRun'
+import {
+  AGENT_MODE_LABEL,
+  describeAgentUnavailable,
+  getAgentProvider,
+  readAgentMode,
+  writeAgentMode,
+} from '../services/agent/agentProvider'
+import { AgentNotConfiguredError, AgentRunAbortedError, type AgentMode } from '../services/agent/agentTypes'
+import { probeLiveAvailability } from '../services/agent/liveAgentProvider'
 import { ALL_SCOPES, DEMO_VIEWER } from '../lib/tmeMock'
+import { createRoomState } from '../lib/agentMock'
 import type {
   AgentState,
   AuthorizationScope,
@@ -53,6 +63,22 @@ function writeSession(key: string, value: unknown): void {
   } catch {
     // 演示环境忽略存储失败
   }
+}
+
+/** 刷新 / 重新进入时，不允许把上次中断的 running 任务当成"仍在跑"，更不允许自动重跑。 */
+function sanitizePersisted(raw: Partial<PersistedState>): Partial<PersistedState> {
+  const agent = raw.agent
+  if (agent && agent.status === 'running') {
+    return {
+      ...raw,
+      agent: {
+        ...agent,
+        status: 'error',
+        error: '上次匹配被中断（刷新或离开页面），不会自动重跑，请点击「重新运行」',
+      },
+    }
+  }
+  return raw
 }
 
 interface PersistedState {
@@ -116,13 +142,26 @@ interface SessionContextValue {
 
   agent: AgentState | null
   agentRunning: boolean
+  /** 已登记 runId、正在做前置检查（例如探测后端模型配置）；页面按"运行中"处理，避免闪回未开始态。 */
+  agentStarting: boolean
   agentError: string
+  /** 当前 Agent 运行模式：mock（Demo 模拟）/ live（真实模型）。 */
+  agentMode: AgentMode
+  agentModeLabel: string
+  /** 切换运行模式（live 未配置时用于一键切回 Demo）。 */
+  setAgentMode: (mode: AgentMode) => void
+  /** 本次任务的唯一 runId；同一个 runId 不会被启动两次。 */
+  agentRunId: string | null
+  /** 非空表示 live 模式但后端没有可用大模型配置，页面据此展示「尚未配置大模型服务」。 */
+  agentNotConfigured: string
   runAgent: (options?: { text?: string; intent?: ParsedIntent | null }) => Promise<AgentState | null>
 
   peerViewed: boolean
-  invite: (candidateId: string) => Promise<void>
-  peerConfirm: (accept: boolean) => Promise<void>
+  /** 返回是否真的邀请成功；失败时会给出 toast，调用方不要假装成功 */
+  invite: (candidateId: string) => Promise<boolean>
+  peerConfirm: (accept: boolean) => Promise<boolean>
   createRoom: () => Promise<boolean>
+  confirmAndCreateRoom: (candidateId: string) => Promise<boolean>
   roomError: string
   feedback: (rating: string, tags: string[], comment: string) => Promise<void>
 
@@ -148,7 +187,10 @@ interface SessionContextValue {
 const SessionContext = createContext<SessionContextValue | null>(null)
 
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<PersistedState>(() => ({ ...emptyState, ...readSession<Partial<PersistedState>>(STORAGE_KEY, {}) }))
+  const [state, setState] = useState<PersistedState>(() => ({
+    ...emptyState,
+    ...sanitizePersisted(readSession<Partial<PersistedState>>(STORAGE_KEY, {})),
+  }))
   const [scenario, setScenario] = useState<DemoScenario>(() => {
     const raw = typeof window === 'undefined' ? null : window.sessionStorage.getItem(SCENARIO_KEY)
     return raw === 'slow' || raw === 'error' ? raw : 'normal'
@@ -159,13 +201,50 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return raw === 'safety_no_match' || raw === 'ai_fallback' ? raw : 'normal'
   })
   const [dataMode, setDataMode] = useState<'mock' | 'backend' | 'probing'>('probing')
+  const [agentMode, setAgentModeState] = useState<AgentMode>(() => readAgentMode())
+  const [agentRunId, setAgentRunId] = useState<string | null>(null)
+  const [agentNotConfigured, setAgentNotConfigured] = useState('')
   const [agentRunning, setAgentRunning] = useState(false)
+  const [agentStarting, setAgentStarting] = useState(false)
   const [agentError, setAgentError] = useState('')
   const [roomError, setRoomError] = useState('')
   const [memoryLoading, setMemoryLoading] = useState(false)
   const [memoryError, setMemoryError] = useState('')
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const timers = useRef<number[]>([])
+  /** 正在执行的 runId；非空表示有任务在跑，任何重复调用都会被忽略。 */
+  const activeRunId = useRef<string | null>(null)
+  const runController = useRef<AbortController | null>(null)
+
+  /** Agent 运行时跟随运行模式：mock 全本地，live 才走后端。 */
+  const agentTransport = agentMode === 'live' ? 'backend' as const : 'mock' as const
+
+  const setAgentMode = useCallback((mode: AgentMode) => {
+    // 切换模式时中止旧任务，避免旧模式的定时器继续写入状态
+    runController.current?.abort()
+    runController.current = null
+    activeRunId.current = null
+    setAgentRunning(false)
+    setAgentError('')
+    setAgentNotConfigured('')
+    writeAgentMode(mode)
+    setAgentModeState(mode)
+  }, [])
+
+  // live 模式一旦选中就探测一次后端模型配置；未配置时立刻给出提示，不进入加载态。
+  useEffect(() => {
+    if (agentMode !== 'live') {
+      setAgentNotConfigured('')
+      return undefined
+    }
+    let alive = true
+    void probeLiveAvailability().then((result) => {
+      if (alive) setAgentNotConfigured(result.ok ? '' : describeAgentUnavailable(result.reason))
+    })
+    return () => {
+      alive = false
+    }
+  }, [agentMode])
 
   useEffect(() => {
     setDemoScenario(scenario)
@@ -194,6 +273,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(
     () => () => {
+      runController.current?.abort()
+      runController.current = null
+      activeRunId.current = null
       timers.current.forEach((id) => window.clearTimeout(id))
     },
     [],
@@ -255,14 +337,45 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // ------------------------------------------------------------ Agent
   const runAgent = useCallback(
     async (options?: { text?: string; intent?: ParsedIntent | null }) => {
+      // 同一时间只允许一个任务：重复点击 / React StrictMode 双调用 / 路由重入都会被这里挡住。
+      if (activeRunId.current) return null
       const text = options?.text ?? state.rawIntent
       const intent = options?.intent ?? state.parsedIntent
+      const mode = readAgentMode()
+      const provider = getAgentProvider(mode)
+      const runId = newAgentRunId()
+      activeRunId.current = runId
+      setAgentRunId(runId)
+      setAgentStarting(true)
+
+      // live 但后端没有可用模型配置：不进入加载动画、不发第二次请求、不静默回退。
+      if (mode === 'live') {
+        const availability = await probeLiveAvailability()
+        if (!availability.ok) {
+          if (activeRunId.current === runId) {
+            activeRunId.current = null
+            setAgentStarting(false)
+            setAgentRunning(false)
+          }
+          setAgentError('')
+          setAgentNotConfigured(describeAgentUnavailable(availability.reason))
+          update(() => ({ agent: null }))
+          return null
+        }
+      }
+
+      // 前置检查期间可能被取消 / 重置，这里再确认一次，避免旧任务继续写状态
+      if (activeRunId.current !== runId) return null
+
+      const controller = new AbortController()
+      runController.current = controller
+      setAgentStarting(false)
       setAgentRunning(true)
       setAgentError('')
       update(() => ({ agent: null, room: null, memory: null, peerViewed: false }))
 
       const placeholder: AgentState = {
-        sessionId: 'running',
+        sessionId: runId,
         userId: DEMO_VIEWER.userId,
         eventId: state.concertId,
         rawIntent: text,
@@ -288,13 +401,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       update(() => ({ agent: placeholder }))
 
       try {
-        const next = await startAgent({
-          text,
+        const next = await runAgentTask({
+          runId,
+          provider,
           eventId: state.concertId,
           userId: DEMO_VIEWER.userId,
+          text,
           scopes: state.scopes,
           demoCase,
-          parsedIntent: intent,
+          scenario,
+          intent,
+          signal: controller.signal,
           onStep: (step) => {
             update((prev) =>
               prev.agent
@@ -304,54 +421,101 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           },
         })
         update(() => ({ agent: next }))
+        // live 模式下如果有步骤回退到本地规则，必须显式说出来，不能让它看起来像模型输出
+        const liveFallback = mode === 'live'
+          ? next.trace.find((step) => step.usedFallback || step.status === 'fallback')
+          : undefined
+        if (liveFallback) {
+          pushToast('大模型调用失败，本次已明确回退到本地规则（详见工作过程）', 'warn')
+        }
         if (next.status === 'no_match') {
           pushToast('这一轮没有找到符合安全条件的同频搭子', 'warn')
         } else if (next.status === 'error') {
           setAgentError(next.error || 'Agent 执行失败，请稍后重试')
-        } else {
+        } else if (!liveFallback) {
           pushToast('Agent 已跑完，为你找到同频方案', 'success')
         }
         return next
       } catch (error) {
+        if (error instanceof AgentRunAbortedError) {
+          // 用户取消 / 切换模式：静默结束，不写 error 状态（否则会把新一轮任务盖掉）
+          return null
+        }
+        if (error instanceof AgentNotConfiguredError) {
+          setAgentNotConfigured(describeAgentUnavailable(error.reason))
+        }
         const message = messageOf(error)
         setAgentError(message)
-        update((prev) => (prev.agent ? { agent: { ...prev.agent, status: 'error', error: message } } : {}))
+        update((prev) => ({
+          agent: prev.agent
+            ? { ...prev.agent, status: 'error', error: message }
+            : { ...placeholder, status: 'error', error: message },
+        }))
+        // 失败后只停在这里，不自动重试、不轮询；由用户点「重新运行」
         return null
       } finally {
-        setAgentRunning(false)
+        // 只有当这个 runId 仍然是"当前任务"时才收尾；
+        // 否则说明它已被取消/重置，收尾会误伤随后启动的新任务。
+        if (activeRunId.current === runId) {
+          activeRunId.current = null
+          runController.current = null
+          setAgentStarting(false)
+          setAgentRunning(false)
+        }
       }
     },
-    [demoCase, pushToast, state.concertId, state.parsedIntent, state.rawIntent, state.scopes, update],
+    [demoCase, pushToast, scenario, state.concertId, state.parsedIntent, state.rawIntent, state.scopes, update],
   )
 
   // ------------------------------------------------------------ 双向确认
   const invite = useCallback(
-    async (candidateId: string) => {
+    async (candidateId: string): Promise<boolean> => {
       const current = state.agent
-      if (!current) return
-      const next = await inviteAgent(current, candidateId)
-      update(() => ({ agent: next, peerViewed: false }))
-      pushToast('已发出同频邀请，等待对方确认')
-      schedule(() => update(() => ({ peerViewed: true })), 1400)
-      schedule(() => {
-        void (async () => {
-          const latest = await peerConfirmAgent({ ...next, pendingConfirmation: { ...next.pendingConfirmation } }, true)
-          update(() => ({ agent: latest }))
-          pushToast('对方已确认，可以进入临时房间了', 'success')
-        })()
-      }, 3600)
+      if (!current) return false
+      try {
+        const next = await inviteAgent(current, candidateId, agentTransport)
+        update(() => ({ agent: next, peerViewed: false }))
+        pushToast('已发出同频邀请，等待对方确认')
+        schedule(() => update(() => ({ peerViewed: true })), 1400)
+        // Demo 里由定时器模拟"对方客户端确认"；真实产品由对方客户端触发。
+        schedule(() => {
+          void (async () => {
+            try {
+              const latest = await peerConfirmAgent(
+                { ...next, pendingConfirmation: { ...next.pendingConfirmation } },
+                true,
+                agentTransport,
+              )
+              update(() => ({ agent: latest }))
+              pushToast('对方已确认，可以进入临时房间了', 'success')
+            } catch (error) {
+              pushToast(messageOf(error), 'warn')
+            }
+          })()
+        }, 3600)
+        return true
+      } catch (error) {
+        pushToast(messageOf(error), 'warn')
+        return false
+      }
     },
-    [pushToast, schedule, state.agent, update],
+    [agentTransport, pushToast, schedule, state.agent, update],
   )
 
   const peerConfirm = useCallback(
-    async (accept: boolean) => {
+    async (accept: boolean): Promise<boolean> => {
       const current = state.agent
-      if (!current) return
-      const next = await peerConfirmAgent(current, accept)
-      update(() => ({ agent: next }))
+      if (!current) return false
+      try {
+        const next = await peerConfirmAgent(current, accept, agentTransport)
+        update(() => ({ agent: next }))
+        return true
+      } catch (error) {
+        pushToast(messageOf(error), 'warn')
+        return false
+      }
     },
-    [state.agent, update],
+    [agentTransport, pushToast, state.agent, update],
   )
 
   const createRoom = useCallback(async () => {
@@ -359,7 +523,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!current) return false
     setRoomError('')
     try {
-      const { state: next, room } = await createRoomAgent(current)
+      const { state: next, room } = await createRoomAgent(current, agentTransport)
       if (!room) {
         setRoomError('双方尚未都确认，不能创建临时房间')
         pushToast('双方尚未都确认，暂时不能进入房间', 'warn')
@@ -373,21 +537,37 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       pushToast(message, 'warn')
       return false
     }
-  }, [pushToast, state.agent, update])
+  }, [agentTransport, pushToast, state.agent, update])
+
+  const confirmAndCreateRoom = useCallback(async (candidateId: string) => {
+    if (!state.agent) return false
+    try {
+      let next = state.agent
+      if (next.pendingConfirmation.candidateId !== candidateId) next = await inviteAgent(next, candidateId, agentTransport)
+      next = { ...next, pendingConfirmation: { ...next.pendingConfirmation, required: true, candidateId, proposerConfirmed: true, peerConfirmed: true, status: 'both_confirmed' } }
+      const created = createRoomState(next)
+      if (!created.room) return false
+      update(() => ({ agent: created.state, room: created.room, peerViewed: true }))
+      return true
+    } catch (error) {
+      pushToast(messageOf(error), 'warn')
+      return false
+    }
+  }, [agentTransport, pushToast, state.agent, update])
 
   const feedback = useCallback(
     async (rating: string, tags: string[], comment: string) => {
       const current = state.agent
       if (!current) return
       try {
-        const next = await feedbackAgent(current, rating, tags, comment)
+        const next = await feedbackAgent(current, rating, tags, comment, agentTransport)
         update(() => ({ agent: next }))
         pushToast('反馈已记录，会用于后续调整匹配权重', 'success')
       } catch (error) {
         pushToast(messageOf(error), 'warn')
       }
     },
-    [pushToast, state.agent, update],
+    [agentTransport, pushToast, state.agent, update],
   )
 
   // ------------------------------------------------------------ 房间
@@ -488,8 +668,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const changeDemoCase = useCallback((next: DemoCase) => setDemoCase(next), [])
 
   const resetAll = useCallback(() => {
+    runController.current?.abort()
+    runController.current = null
+    activeRunId.current = null
+    setAgentStarting(false)
+    setAgentRunning(false)
     setState(emptyState)
     setAgentError('')
+    setAgentRunId(null)
+    setAgentNotConfigured('')
     setRoomError('')
     setMemoryError('')
     setToasts([])
@@ -530,12 +717,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       savePrefs,
       agent: state.agent,
       agentRunning,
+      agentStarting,
       agentError,
+      agentMode,
+      agentModeLabel: AGENT_MODE_LABEL[agentMode],
+      setAgentMode,
+      agentRunId,
+      agentNotConfigured,
       runAgent,
       peerViewed: state.peerViewed,
       invite,
       peerConfirm,
       createRoom,
+      confirmAndCreateRoom,
       roomError,
       feedback,
       room: state.room,
@@ -557,6 +751,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [
       agentError,
       agentRunning,
+      agentStarting,
+      agentMode,
+      agentNotConfigured,
+      agentRunId,
       changeDemoCase,
       changeScenario,
       completeAuthorization,
@@ -564,6 +762,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       confirmMeeting,
       createMemory,
       createRoom,
+      confirmAndCreateRoom,
       dataMode,
       demoCase,
       dismissToast,
@@ -584,6 +783,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       scenario,
       selectConcert,
       setRawIntent,
+      setAgentMode,
       setScopes,
       state,
       toasts,

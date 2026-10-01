@@ -37,9 +37,20 @@ SyncStage 面向赛道一，以 QQ音乐现有内容与用户音乐资产为起�
 
 ## 产品信息架构
 
-`QQ音乐演出详情 → 音乐画像授权 → Agent 对话及需求确认 → Agent 执行 → 匹配结果与邀请 → 双向确认后的临时同行房间`
+产品一级导航固定为四项：**首页 / 同频 / 消息 / 我的**。
 
-完整页面路由、工具职责与数据字段见 [信息架构](./docs/information-architecture.md)。`#/list` 仅用于切换 Demo 演出，不是独立产品首页。
+| 一级 Tab | 主任务 |
+| --- | --- |
+| **首页** | 一眼看到下一步：开始匹配或回到进行中的房间，并选择演出 |
+| **同频** | 人与匹配优先：进行中的匹配/房间 + 推荐同频用户（头像、同频度、共同音乐偏好、共同演出、推荐理由） |
+| **消息** | Agent 通知、群聊与临时房间、私聊、系统通知；二级聊天室支持语音入口与 Agent 集合建议卡片 |
+| **我的** | 头像昵称、音乐画像摘要、演出数/匹配数/同频好友数，以及编辑资料、我的演出、同频好友、音乐画像与授权、隐私与安全、Agent 设置、设置入口 |
+
+**核心原则**：一级页面的主要任务在 1～1.5 个 iPhone 390×844 屏幕内完成；复杂解释、Agent 工具轨迹与权限详情全部下沉到二级页面、Bottom Sheet 或折叠详情，不允许 3～5 屏连续纵向卡片堆叠（`npm run screens` 会实测每个核心页面的屏幕数）。
+
+演出主链路仍然是二级流程：`演出详情 → 音乐画像授权 → Agent 对话及需求确认 → Agent 匹配进度 → 匹配结果与邀请 → 双向确认后的临时同行房间`。
+
+完整页面路由、工具职责与数据字段见 [信息架构](./docs/information-architecture.md)。
 
 ## SyncStage Agent 工作流
 
@@ -47,11 +58,13 @@ SyncStage 面向赛道一，以 QQ音乐现有内容与用户音乐资产为起�
 确定性安全过滤 → 打分排序并尝试组队 → 只用真实 evidence 生成理由 → **进入 pending_confirmation** →
 **双方都确认后**才创建临时房间。
 
-六个展示阶段（前端进度页依次点亮）：
+一级进度页只讲人话，四个阶段依次点亮（内部六个阶段被折叠进第 2、3 阶段）：
 
 ```
-理解你的意图 → 读取授权音乐偏好 → 检索同场候选人 → 执行安全约束 → 计算同频程度 → 生成同频方案
+理解需求 → 寻找同场用户 → 计算同频度 → 生成组队方案
 ```
+
+跑完后停留在进度页，直接给出候选人数、Top Match（头像 / 同频度 / 档位）与匹配理由；全部工具调用记录（工具名、所属阶段、输入输出摘要、耗时、fallback、被排除的人、得分构成）完整保留在「查看 Agent 工作过程」二级页面 `#/concert/:concertId/trace`。
 
 Agent 的十个工具（后端 `backend/app/agent/tools/`，标准流水线用到前八个）：
 
@@ -115,7 +128,54 @@ macOS / Linux 用 `cp` 生成 `backend/.env` 与 `frontend/.env.local`。
 
 - 前端只允许读取 `VITE_` 开头的公开配置；
 - **任何 API Key 都不会写进前端，也不会提交到 Git**，`.env` 已被 `.gitignore` 忽略，仓库里只有 `.env.example`；
-- 留空 `OPENAI_API_KEY` / `OPENAI_MODEL` 时，后端自动走确定性规则与文案模板，Demo 不依赖网络。
+- 没有配置真实大模型时，后端会明确说明原因（`no_model` / `no_api_key`），前端照原样展示；只有显式设置 `AI_FORCE_FALLBACK=1` 时才会返回**带 `demo-fallback` 标记**的本地模板结果。
+
+### 4. 真实大模型（ChatRoom 对话 / 意图解析 / 破冰 / 标签）
+
+支持两类接口形态，用 `OPENAI_API_STYLE` 切换（不填时按 base_url 端口自动判断）：
+
+| 形态 | 适用 | 关键配置 |
+| --- | --- | --- |
+| `openai` | OpenAI 及任何兼容 `/chat/completions` 的网关 | `OPENAI_BASE_URL`、`OPENAI_MODEL`、`OPENAI_API_KEY` |
+| `ollama` | 本机 Ollama 原生 `/api/chat`（可关闭思考过程，响应快） | `OPENAI_BASE_URL=http://127.0.0.1:11434/v1`、`OPENAI_MODEL=<模型名>`，本地服务**不需要 API Key** |
+
+```bash
+# 例：用本机 Ollama 跑真实模型
+ollama pull qwen3.5:0.8b
+cd backend
+.venv\Scripts\python.exe -m uvicorn app.main:app --port 8020
+# backend/.env 写入：
+#   OPENAI_BASE_URL=http://127.0.0.1:11434/v1
+#   OPENAI_MODEL=qwen3.5:0.8b
+#   OPENAI_API_STYLE=ollama
+```
+
+自检与查看状态：
+
+```bash
+cd backend
+.venv\Scripts\python.exe scripts/llm_check.py     # 真实往返一次，打印配置、耗时与原始错误
+curl http://127.0.0.1:8020/api/ai/status            # 当前模型 / 接口 / 是否配置 Key（不含 Key）
+curl -X POST http://127.0.0.1:8020/api/ai/diagnose  # 真实调用一次模型，失败时返回明确错误码
+```
+
+**不静默回退**：`POST /api/agent/chat` 在模型失败时返回带 `code`（`auth_failed` / `timeout` / `connection` / `model_not_found` / `empty_content` …）、`message`、`hint` 的错误体，HTTP 状态对应 401 / 429 / 502 / 504；聊天室会把原因显示出来并提供「重试这条消息」，绝不会用预设文案伪装成模型回复。
+
+### 5. Agent 运行模式（mock / live）
+
+Agent 匹配有且只有两种运行模式，由环境变量决定，页面不会自己猜：
+
+| 变量 | 位置 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `VITE_AGENT_MODE` | `frontend/.env.local` | `mock` | `mock` = Demo 模拟 Agent；`live` = 真实模型 Agent |
+| `AGENT_MODE` | `backend/.env` | `mock` | 只有后端也设为 `live` 且模型配置有效时才允许真实调用 |
+
+- **mock（初赛默认）**：只用本地 JSON / TypeScript 数据，**不访问任何外部大模型 API**；六个固定步骤（理解需求 → 读取授权画像 → 检索同场候选人 → 安全条件过滤 → 结构化协商 → 生成 3 位候选人），每步约 500ms，总时长 3~5 秒，跑完自动跳转 `/concert/:concertId/matches`。页面上会明确标注「Demo 模拟 Agent」，不会伪装成模型输出。
+- **live**：先探测后端 `/api/ai/status`。只有 `enabled=true` 且 `agentMode=live` 才进入运行；否则**不进入加载动画、不重复发请求**，直接显示「尚未配置大模型服务」+ 具体原因（`no_api_key` / `no_model` / `agent_mode_mock` / `backend_unreachable`），并提供「切换 Demo 模式」按钮。页面不会向你索取 API Key。
+
+统一适配层在 `frontend/src/services/agent/`：`agentProvider.ts`（按环境变量选择 Provider）、`mockAgentProvider.ts`、`liveAgentProvider.ts`、`agentTypes.ts`。对外只暴露 `parseIntent` / `buildMusicProfile` / `searchCandidates` / `filterBySafety` / `negotiateCandidate` / `generateIcebreakers`，页面与 store 都不会直接调用任何大模型 SDK。
+
+**不会无限循环**：一次任务只生成一个 `runId`，同一个 `runId` 不会被启动第二次；整体超时 10 秒，超时即进入 error 状态且**不自动重试**；每一步最多重试 1 次；进入进度页**不会自动运行**，只有用户点击「开始匹配 / 重新运行」才执行；刷新页面会把中断中的任务显式标记为「上次匹配被中断」，不会自动重跑；失败后提供「重新运行」与「返回修改需求」。
 
 ## 演示路径（主链路全部可点击）
 
@@ -125,19 +185,27 @@ QQ音乐演出详情概念页 → 点击「一起去现场」→ QQ音乐画像�
 
 | # | 页面 | 路由 | 看点 |
 | --- | --- | --- | --- |
-| 1 | **模拟 QQ 音乐演出详情页（默认入口）** | `#/` 或 `#/concert/night-flight` | 海报、歌手、时间、地点、票价、本场曲目、安全提示、「一起去现场」入口 |
+| 1 | **首页（一级 Tab）** | `#/` | 当前状态卡（开始匹配 / 回到房间）+ 最近两场演出 + 三个快捷入口；底部固定四项导航 |
+| 1.5 | 模拟 QQ 音乐演出详情页 | `#/concert/night-flight` | 海报、歌手、时间、地点、票价、本场曲目、安全提示、「一起去现场」入口 |
 | 2 | 音乐数据授权 | `.../authorize` | 五类数据逐项授权 + 脱敏预览 + 官方 API 限制说明 |
-| 3 | Agent 对话及需求确认 | `.../intent` | 自然语言输入后在同页确认歌曲、目的、交流方式、人数与安全条件 |
-| 5 | **Agent 执行进度** | `.../agent` | 六个阶段依次点亮；评委模式额外显示工具名、输入输出摘要、耗时与 fallback |
+| 3 | Agent 对话及需求确认 | `.../task` | 自然语言输入后在同页确认歌曲、目的、交流方式、人数与安全条件 |
+| 5 | **Agent 匹配进度** | `.../running` | 四个阶段依次点亮；跑完停留在本页给出候选人数、Top Match 与匹配理由 |
+| 5.5 | **查看 Agent 工作过程** | `.../trace` | 全部工具调用记录：工具名、所属阶段、输入输出摘要、耗时、fallback、被排除的人、得分构成 |
 | 6 | 匹配结果与证据 | `.../matches` | 3 位候选人、匹配度、共同歌曲、共同目的、差异点、可核对的理由；「查看依据」抽屉 |
 | 7 | 双向确认 | 同页 | 邀请已发出 → 对方已查看 → 双方确认；**未双方确认不会出现进入房间的入口** |
 | 8 | 限时房间 | `.../room` | 双向确认状态、音乐破冰问题、候场任务、公开集合点、退出与举报 |
+| 9 | **同频（一级 Tab）** | `#/sync` | 进行中的匹配/房间 + 推荐同频用户卡片（头像、同频度、共同音乐偏好、共同演出、推荐理由） |
+| 10 | **消息（一级 Tab）** | `#/messages` | Agent 通知 / 群聊与临时房间 / 私聊 / 系统通知四类会话 |
+| 11 | 聊天室 | `#/messages/:threadId` | 消息气泡、输入框、语音入口；Agent 以特殊消息卡片给出集合时间/地点建议 |
+| 12 | **我的（一级 Tab）** | `#/me` | 头像昵称、音乐画像摘要、演出数/匹配数/同频好友数、六个二级入口 |
 
 
-### 「查看 Agent 依据」抽屉
+### 「查看 Agent 工作过程」二级页面与「查看 Agent 依据」抽屉
 
-匹配结果页的「查看依据」抽屉会展示：工具调用步骤、使用的数据来源、被排除候选人的规则原因、
-每项匹配得分（`score_breakdown`）、推荐理由引用的具体歌曲/歌手/目的，以及**等待用户确认的下一步动作**。
+一级进度页只保留四个阶段与结果摘要；完整的工具调用记录在 `#/concert/:concertId/trace` 二级页面，
+同一个内容组件也作为匹配结果页的「查看依据」抽屉复用，展示：工具调用步骤（含所属阶段与耗时）、
+使用的数据来源、被排除候选人的规则原因、每项匹配得分（`score_breakdown`）、推荐理由引用的具体歌曲/歌手/目的，
+以及**等待用户确认的下一步动作**。
 
 ## 评委演示模式
 
@@ -178,7 +246,10 @@ QQ音乐演出详情概念页 → 点击「一起去现场」→ QQ音乐画像�
 ```
 frontend/          React 19 + TypeScript + Vite 6 + Tailwind CSS 4（移动端优先，最大宽度 440px）
   src/lib/          tmeMock（前端 TME 适配层）· agentMock（本地 Agent 镜像）· scoring · api（数据源）
-  src/store/        session.tsx：演示会话状态，写入 sessionStorage
+  src/pages/        四个一级 Tab（首页 / 同频 / 消息 / 我的）+ 演出主链路与 Agent 工作过程二级页面
+  src/components/   TabLayout（底部一级导航）· PageShell（二级页面）· AgentEvidence（工具轨迹共用内容）
+  src/store/        session.tsx：演示会话状态，写入 sessionStorage；social.tsx：消息中心与会话
+  scripts/          matching-smoke（匹配引擎）· e2e-smoke（完整演示路径）· screen-budget（屏幕预算）
 backend/           Python 3.11+ / FastAPI + SQLite（标准库 sqlite3）
   app/integrations/ TME 数据适配层：base（抽象接口）· mock_qqmusic · official_tme（预留）
   app/agent/        state · orchestrator · schemas · scoring · social · tools/（十个工具）
@@ -209,6 +280,8 @@ cd frontend
 npm run typecheck      # TypeScript 严格模式类型检查
 npm run smoke          # 匹配引擎 + Agent 流水线冒烟测试
 npm run e2e            # 无头 Chrome 走完整演示路径与三个案例、加载/空结果/错误状态
+npm run e2e:llm        # 真实大模型链路验收（需先启动后端与 dev server）
+npm run screens        # 390×844 实测每个核心页面的屏幕数（一级页面 1～1.5 屏）
 npm run build          # 生产构建
 
 # 后端（可选）
@@ -216,7 +289,7 @@ cd backend
 python -m pytest tests -q -p no:cacheprovider
 ```
 
-验证结果：`npm run typecheck` 通过、`npm run build` 通过、`npm run smoke` **66** 项断言全部通过、`npm run e2e` **83** 项检查全部通过、后端 `pytest` **21** 个测试全部通过。
+验证结果：`npm run typecheck` 通过、`npm run build` 通过、`npm run smoke` **68** 项断言全部通过、`npm run e2e` **154** 项检查全部通过、`npm run e2e:llm` **31** 项真实链路检查全部通过（含真实模型回复、失败与重试、真实语音入口、头像持久化与资料同步）、`npm run screens` 全部核心页面（含 `/me/edit`）在屏幕预算内、后端 `pytest` **30** 个测试全部通过。
 
 ## Demo 数据
 
@@ -237,10 +310,10 @@ python -m pytest tests -q -p no:cacheprovider
 - **Demo 数据**：仓库中的演出、歌曲、头像和匿名成员均为虚构示例，不包含真实个人信息。
 ## 当前限制与后续计划
 
-- 不做复杂登录、支付、真实票务、精确位置与完整聊天系统；
+- 不做复杂登录、支付、真实票务与精确位置；消息中心与聊天室只服务演出前与候场期，不是通用社交 IM；
 - 未接入 TME 官方 API 与真实 QQ 音乐账号，匹配池是脱敏 Demo 数据；
 - 「双方确认」由 Demo 模拟对方客户端（定时推进），不是真实双端推送；
-- 大模型为预留接口，默认走本地规则与模板，不依赖网络；
+- 大模型已接入真实调用（`/api/agent/chat` 等），失败时会明确报错并给出重试；只有显式 `AI_FORCE_FALLBACK=1` 才走带标记的 Demo 模板；
 - 视觉上只借鉴 QQ 音乐品牌绿，不复制其受版权保护的界面。
 
-后续计划包括：在获得授权后接入官方测试 API、完善用户研究与安全评估、增加真实端到端测试、优化小组匹配与解释质量。详细路线见 [路线图](./docs/roadmap.md)。
+后续计划包括：在获得授权后接入官方测试 API、完善用户研究与安全评估、把语音消息与真实双端推送补齐、优化小组匹配与解释质量。详细路线见 [路线图](./docs/roadmap.md)。

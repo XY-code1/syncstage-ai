@@ -1,12 +1,13 @@
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { MockNotice, QQMusicBar } from '../components/QQMusicBar'
 import { Button, Card, Chip, SectionTitle, StateView } from '../components/ui'
 import { SparkleIcon } from '../components/icons'
 import { CHAT_STYLE_OPTIONS, GROUP_SIZE_OPTIONS, PURPOSE_OPTIONS, SAFETY_OPTIONS } from '../data/options'
 import { messageOf, useSession } from '../store/session'
+import { useConcertFlow } from '../store/concertFlow'
 import { parseIntentRequest } from '../lib/api'
-import { DEMO_VIEWER, getMusicProfile } from '../lib/tmeMock'
+import { DEMO_VIEWER } from '../lib/tmeMock'
 import type { ChatStyle, GroupSize, ParsedIntent, Purpose, SafetyPref } from '../types'
 
 const EXAMPLES = [
@@ -18,13 +19,13 @@ const EXAMPLES = [
 export function IntentPage() {
   const { concertId = 'night-flight' } = useParams()
   const navigate = useNavigate()
-  const { rawIntent, setRawIntent, scopes, saveParsedIntent, runAgent, pushToast, destroyEventAgent } = useSession()
+  const { rawIntent, setRawIntent, scopes, saveParsedIntent, runAgent, pushToast } = useSession()
   const [text, setText] = useState(rawIntent)
   const [intent, setIntent] = useState<ParsedIntent | null>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [error, setError] = useState('')
-  const [hidden, setHidden] = useState<string[]>([])
-  const profile = getMusicProfile(DEMO_VIEWER.userId, scopes)
+  const { flow, patchFlow } = useConcertFlow(concertId)
+  if (flow.consentStatus !== 'granted') return <Navigate to={`/concert/${concertId}/authorize`} replace />
 
   const parse = async () => {
     if (text.trim().length < 6) return
@@ -36,6 +37,7 @@ export function IntentPage() {
       setRawIntent(text.trim())
       setIntent(result.parsedIntent)
       saveParsedIntent(result.parsedIntent)
+      patchFlow({ intent: result.parsedIntent })
       setStatus('idle')
     } catch (err) {
       setError(messageOf(err))
@@ -55,7 +57,9 @@ export function IntentPage() {
   const start = () => {
     if (!intent) return
     saveParsedIntent(intent)
-    navigate(`/concert/${concertId}/agent`)
+    // runId 由 session store 统一生成并保证唯一，这里不再自己造一个
+    patchFlow({ intent })
+    navigate(`/concert/${concertId}/running`)
     void runAgent({ intent })
   }
 
@@ -68,27 +72,10 @@ export function IntentPage() {
             <h1 className='text-[19px] font-semibold text-white'>给同行 Agent 一个任务</h1>
             <p className='mt-2 text-[12px] leading-relaxed text-white/55'>描述希望它替你核对的歌曲、到场计划、人数和安全边界。Agent 只做结构化协商，不替你持续聊天。</p>
           </div>
+          <button type='button' onClick={() => navigate(`/concert/${concertId}/authorize?edit=1`)} className='min-h-11 rounded-2xl border border-white/10 bg-white/[.03] px-3 text-left text-sm text-white/65'>已授权 {flow.consentScopes.length || scopes.length} 项音乐画像 · <span className='text-brand-300'>修改</span></button>
 
           <Card className='signal-card'>
-            <SectionTitle title='同行 Agent 眼中的你' hint='每项均可隐藏；编辑需求后会即时更新' />
-            <div className='space-y-2'>
-              {[
-                ['音乐偏好', profile?.favoriteTracks.slice(0, 3).map((v) => `《${v.title}》`).join('、') || '未授权', '收藏歌曲'],
-                ['常听歌手', profile?.topArtists.join('、') || '未授权', '常听歌手'],
-                ['同行目的', intent?.purposes.join('、') || '等待你描述任务', '你这次的原话'],
-                ['交流方式', intent?.chatStyle || '等待你描述任务', '你这次的原话'],
-                ['到场计划', '开场前 40 分钟抵达公开集合点', '本场演出 + 用户确认'],
-                ['组队人数', intent ? `${intent.groupSize} 人` : '等待你描述任务', '你这次的原话'],
-                ['安全边界', intent?.safety.join('、') || '默认仅公开场合见面', '用户确认的硬规则'],
-              ].map(([label, value, source]) => {
-                const isHidden = hidden.includes(label)
-                return <div key={label} className='rounded-xl border border-white/8 bg-black/15 px-3 py-2.5'>
-                  <div className='flex items-center justify-between gap-2'><p className='text-sm font-medium text-white'>{label}</p><button className='text-xs text-brand-300' onClick={() => setHidden((prev) => isHidden ? prev.filter((v) => v !== label) : [...prev, label])}>{isHidden ? '恢复' : '隐藏'}</button></div>
-                  <p className='mt-1 text-sm text-white/65'>{isHidden ? '已隐藏，不提供给候选 Agent' : value}</p><p className='mt-1 text-xs text-white/35'>来源：{source}</p>
-                </div>
-              })}
-            </div>
-            <Button className='mt-3' variant='ghost' size='sm' full onClick={() => { destroyEventAgent(); navigate(`/concert/${concertId}`) }}>销毁本场 Agent 并撤回授权</Button>
+            <div className='flex items-center justify-between gap-3'><div><p className='text-sm font-semibold text-white'>同行 Agent 眼中的你</p><p className='mt-1 text-sm text-white/50'>音乐偏好与常听歌手来自已授权画像；任务和安全边界来自本次输入。</p></div><span className='shrink-0 text-xs text-brand-300'>可编辑</span></div>
           </Card>
 
           <Card className='p-0'>

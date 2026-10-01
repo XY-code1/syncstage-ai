@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from app.agent import orchestrator as orch
 from app.agent.schemas import (
     AgentRunRequest,
+    ChatRequest,
     FeedbackRequest,
     IntentParseRequest,
     InviteRequest,
@@ -16,6 +17,8 @@ from app.agent.social import load_social_profile
 from app.agent.state import AgentState, ParsedIntent
 from app.agent.tools import PIPELINE, TOOLS, ToolContext
 from app.config import settings
+from app.services import conversation
+from app.services.ai_client import LLMError, http_status_for
 
 router = APIRouter(prefix='/api/agent', tags=['agent'])
 
@@ -167,3 +170,12 @@ async def feedback(session_id: str, payload: FeedbackRequest) -> dict:
     except KeyError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     return state.to_dict()
+
+@router.post('/chat')
+async def chat(payload: ChatRequest) -> dict:
+    """真实大模型对话：带上演出 / 成员 / 集合点上下文，失败时返回明确错误而不是伪造回复。"""
+
+    try:
+        return await conversation.reply(payload)
+    except LLMError as error:
+        raise HTTPException(status_code=http_status_for(error), detail=error.to_dict()) from error

@@ -12,6 +12,7 @@ export function Avatar({
   size = 44,
   className,
   showRing,
+  src,
 }: {
   name: string
   from: string
@@ -19,12 +20,25 @@ export function Avatar({
   size?: number
   className?: string
   showRing?: boolean
+  /** 自定义头像（data URL / 图片地址），用于"我的"当前用户 */
+  src?: string | null
 }) {
+  const ring = showRing ? 'ring-2 ring-brand-500/45 ring-offset-2 ring-offset-stage-950' : undefined
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={name}
+        className={cn('shrink-0 rounded-full object-cover', ring, className)}
+        style={{ width: size, height: size }}
+      />
+    )
+  }
   return (
     <div
       className={cn(
         'flex shrink-0 items-center justify-center rounded-full font-semibold text-stage-950',
-        showRing && 'ring-2 ring-brand-500/45 ring-offset-2 ring-offset-stage-950',
+        ring,
         className,
       )}
       style={{

@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "smoke": "node scripts/matching-smoke.mjs",
-    "e2e": "node scripts/e2e-smoke.mjs"
+    "e2e": "node scripts/e2e-smoke.mjs",
+    "e2e:llm": "node scripts/e2e-llm.mjs",
+    "screens": "node scripts/screen-budget.mjs"
   },
   "dependencies": {
     "react": "^19.1.0",

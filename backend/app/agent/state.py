@@ -241,6 +241,11 @@ class AgentState:
 
 
 def _profile_summary(profile: UserMusicProfile | None) -> dict[str, Any] | None:
+    """序列化成前端 MusicProfile 契约（与 frontend/src/types.ts 严格对齐）。
+
+    前端 AgentEvidence 直接读 favoriteTracks / recentPlays 的长度，
+    字段名一旦对不上，「Agent 工作过程」二级页面会整页崩成白屏。
+    """
     if profile is None:
         return None
     return {
@@ -248,9 +253,28 @@ def _profile_summary(profile: UserMusicProfile | None) -> dict[str, Any] | None:
         'displayName': profile.display_name,
         'ageBand': profile.age_band,
         'city': profile.city,
-        'favoriteTitles': list(profile.favorite_titles()),
+        'gender': profile.gender,
+        'favoriteTracks': [
+            {
+                'trackId': track.track_id,
+                'title': track.title,
+                'artist': track.artist,
+                'album': track.album,
+                'tags': list(track.tags),
+            }
+            for track in profile.favorite_tracks
+        ],
         'topArtists': list(profile.top_artists),
-        'recentTitles': list(profile.recent_titles()),
+        'recentPlays': [
+            {
+                'trackId': play.track_id,
+                'title': play.title,
+                'artist': play.artist,
+                'playCount': play.play_count,
+                'lastPlayedAt': play.last_played_at,
+            }
+            for play in profile.recent_plays
+        ],
         'followedEventIds': list(profile.followed_event_ids),
         'playlistTags': list(profile.playlist_tags),
         'authorizedScopes': list(profile.authorized_scopes),

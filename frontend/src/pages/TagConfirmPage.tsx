@@ -39,7 +39,7 @@ export function TagConfirmPage() {
 
   if (!prefs && !parsedIntent) {
     return (
-      <PageShell title='音乐标签微调' step={2} onBack={() => navigate(`/concert/${concertId}/intent`)}>
+      <PageShell title='音乐标签微调' step={0} onBack={() => navigate(`/concert/${concertId}/task`)}>
         <StateView
           status='empty'
           title='还没有你的偏好信息'
@@ -75,21 +75,21 @@ export function TagConfirmPage() {
     savePrefs(nextPrefs)
     void keywords
     pushToast('标签已保存，Agent 会把这些标签当作补充偏好', 'success')
-    navigate(`/concert/${concertId}/intent/confirm`)
+    navigate(`/concert/${concertId}/task/confirm`)
   }
 
   return (
     <PageShell
       title='音乐标签微调'
       subtitle='这些是从你的填写内容里整理出来的标签'
-      step={2}
-      onBack={() => navigate(`/concert/${concertId}/intent/confirm`)}
+      step={0}
+      onBack={() => navigate(`/concert/${concertId}/task/confirm`)}
       footer={
         <div className='flex flex-col gap-2'>
           <Button size='lg' full icon={<CheckIcon className='h-4 w-4' />} onClick={confirm}>
             保存这些标签
           </Button>
-          <Button variant='ghost' size='sm' full onClick={() => navigate(`/concert/${concertId}/intent/confirm`)}>
+          <Button variant='ghost' size='sm' full onClick={() => navigate(`/concert/${concertId}/task/confirm`)}>
             返回确认页
           </Button>
         </div>

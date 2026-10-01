@@ -193,7 +193,10 @@ def test_a2a_exchange_is_structured_and_contains_no_sensitive_fields() -> None:
     assert set(report['exchangedFields']) == {'eventId', 'arrivalWindow', 'musicTags', 'socialIntent', 'groupSize', 'safetyConstraints'}
     serialized = str(report['exchangedFields'])
     assert all(value not in serialized for value in ('realName', 'phone', 'contact', 'exactLocation', 'rawListeningHistory'))
-    assert state['musicProfile']['recentTitles'] == []
+    assert state['musicProfile']['recentPlays'] == []
+    # 只授权了 favorite_songs：收藏有数据，但近期播放与常听歌手必须为空
+    assert state['musicProfile']['favoriteTracks']
+    assert all(track['title'] for track in state['musicProfile']['favoriteTracks'])
     assert state['musicProfile']['topArtists'] == []
 
 

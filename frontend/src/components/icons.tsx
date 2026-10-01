@@ -197,3 +197,133 @@ export function ChatIcon({ className = base }: IconProps) {
     </svg>
   )
 }
+
+export function HomeIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+      <path d='M4 10.4L12 4l8 6.4V19a1.4 1.4 0 01-1.4 1.4H5.4A1.4 1.4 0 014 19v-8.6z' />
+      <path d='M9.6 20.4v-6.2h4.8v6.2' />
+    </svg>
+  )
+}
+
+export function PersonIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+      <circle cx='12' cy='8.4' r='3.6' />
+      <path d='M4.8 20v-.9a5.4 5.4 0 015.4-5.4h3.6a5.4 5.4 0 015.4 5.4v.9' />
+    </svg>
+  )
+}
+
+export function MicIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+      <rect x='9.2' y='3.4' width='5.6' height='10.2' rx='2.8' />
+      <path d='M5.8 11.4a6.2 6.2 0 0012.4 0M12 17.6V20.6' />
+    </svg>
+  )
+}
+
+export function BellIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+      <path d='M18 15.6V10a6 6 0 10-12 0v5.6L4.6 18h14.8L18 15.6z' />
+      <path d='M10 20.4a2 2 0 004 0' />
+    </svg>
+  )
+}
+
+export function SettingsIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+      <circle cx='12' cy='12' r='2.8' />
+      <path d='M19.4 14.4a1.6 1.6 0 00.3 1.8l.1.1a1.9 1.9 0 11-2.7 2.7l-.1-.1a1.6 1.6 0 00-2.7 1.1v.3a1.9 1.9 0 11-3.8 0v-.2a1.6 1.6 0 00-2.8-1.1l-.1.1a1.9 1.9 0 11-2.7-2.7l.1-.1a1.6 1.6 0 00-1.1-2.7h-.3a1.9 1.9 0 110-3.8h.2a1.6 1.6 0 001.1-2.8l-.1-.1A1.9 1.9 0 016 4.2l.1.1a1.6 1.6 0 001.8.3h.1a1.6 1.6 0 001-1.5v-.3a1.9 1.9 0 113.8 0v.2a1.6 1.6 0 002.7 1.1l.1-.1a1.9 1.9 0 112.7 2.7l-.1.1a1.6 1.6 0 00-.3 1.8v.1a1.6 1.6 0 001.5 1h.3a1.9 1.9 0 110 3.8h-.2a1.6 1.6 0 00-1.4 1z' />
+    </svg>
+  )
+}
+
+export function LockIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+      <rect x='4.6' y='10.4' width='14.8' height='9.6' rx='2.2' />
+      <path d='M8.2 10.4V8a3.8 3.8 0 017.6 0v2.4' />
+    </svg>
+  )
+}
+
+export function ChevronRightIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.8' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+      <path d='M9.5 5.5l6.5 6.5-6.5 6.5' />
+    </svg>
+  )
+}
+
+export function SearchIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+      <circle cx='11' cy='11' r='6.4' />
+      <path d='M15.8 15.8L20 20' />
+    </svg>
+  )
+}
+
+export function VolumeIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+      <path d='M5 9.5h3l4-3.2v11.4l-4-3.2H5z' />
+      <path d='M15.4 9.4a3.6 3.6 0 010 5.2M17.8 7.2a7 7 0 010 9.6' />
+    </svg>
+  )
+}
+export function CameraIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+      <path d='M4 8.5h2.4l1.3-2h8.6l1.3 2H20a1 1 0 011 1v8a1 1 0 01-1 1H4a1 1 0 01-1-1v-8a1 1 0 011-1z' />
+      <circle cx='12' cy='13.5' r='3.2' />
+    </svg>
+  )
+}
+
+export function StopIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.8' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+      <rect x='6.5' y='6.5' width='11' height='11' rx='2.5' />
+    </svg>
+  )
+}
+
+export function GlobeIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+      <circle cx='12' cy='12' r='8.2' />
+      <path d='M3.8 12h16.4M12 3.8c2.2 2.4 3.3 5.2 3.3 8.2s-1.1 5.8-3.3 8.2c-2.2-2.4-3.3-5.2-3.3-8.2S9.8 6.2 12 3.8z' />
+    </svg>
+  )
+}
+
+export function PhoneIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+      <path d='M7 3.8h3l1.2 3.4-1.8 1.4a11 11 0 005.9 5.9l1.4-1.8 3.4 1.2v3c0 .9-.8 1.6-1.7 1.5C10.9 17.7 6.3 13 5.5 5.5 5.4 4.6 6.1 3.8 7 3.8z' />
+    </svg>
+  )
+}
+
+export function CakeIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+      <path d='M4 20h16M5 20v-6.5a1.5 1.5 0 011.5-1.5h11A1.5 1.5 0 0119 13.5V20' />
+      <path d='M12 12V8.5M12 8.5c-1 0-1.8-.8-1.8-1.8S12 4 12 4s1.8 1.7 1.8 2.7S13 8.5 12 8.5z' />
+    </svg>
+  )
+}
+
+export function LoaderIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' aria-hidden='true'>
+      <path d='M12 3.5a8.5 8.5 0 108.5 8.5' />
+    </svg>
+  )
+}

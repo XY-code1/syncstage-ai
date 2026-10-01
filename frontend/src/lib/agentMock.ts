@@ -25,6 +25,8 @@ import type {
 import { buildIcebreakers, buildRoomTasks } from './content'
 import { A2A_TOOLS, generateHandshakeReport } from './a2aNegotiation'
 import { QUALIFY_MIN_SCORE, checkHardConstraints, rankCandidates } from './scoring'
+import { AGENT_RUN_TIMEOUT_MS, AgentRunAbortedError, AgentRunTimeoutError } from '../services/agent/agentTypes'
+import type { AgentProvider } from '../services/agent/agentTypes'
 import {
   ALL_SCOPES,
   DEMO_VIEWER,
@@ -56,6 +58,9 @@ const PHASE_OF_TOOL: Record<string, string> = {
   rank_candidates: 'rank',
   build_group: 'plan',
   generate_grounded_reason: 'plan',
+  // Mock 六步流程里的两个合成步骤
+  agent_negotiation: 'rank',
+  generate_candidates: 'plan',
   send_mutual_consent_invitation: 'plan',
   create_temporary_room: 'plan',
   collect_feedback: 'plan',
@@ -72,6 +77,8 @@ const TOOL_LABELS: Record<string, string> = {
   rank_candidates: '计算同频程度',
   build_group: '生成组队方案',
   generate_grounded_reason: '生成有证据的理由',
+  agent_negotiation: '进行 Agent 结构化协商',
+  generate_candidates: '生成 3 位同频候选人',
   send_mutual_consent_invitation: '发送双向确认邀请',
   create_temporary_room: '创建临时房间',
   collect_feedback: '收集反馈',
@@ -84,6 +91,14 @@ export function toolLabel(name: string): string {
   return TOOL_LABELS[name] ?? name
 }
 
+/**
+ * Mock Agent 的固定节奏：六步，每步约 500ms，总时长稳定在 3~5 秒。
+ * 这里刻意不读取 cost，避免"每步延迟不一样"导致总时长不可预期。
+ */
+export const MOCK_STEP_DELAY_MS = 500
+/** Mock 只产出 3 位候选人，与初赛 Demo 的展示口径一致。 */
+export const MOCK_CANDIDATE_LIMIT = 3
+
 export function phasesOf(trace: ToolTrace[]): AgentPhase[] {
   return AGENT_PHASES.map((phase) => {
     const steps = trace.filter((item) => item.phase === phase.id)
@@ -93,6 +108,38 @@ export function phasesOf(trace: ToolTrace[]): AgentPhase[] {
         ? 'done'
         : 'failed'
     return { ...phase, state, steps }
+  })
+}
+
+/**
+ * 用户可见的四个阶段。六个内部阶段被折叠进「寻找同场用户」与「计算同频度」，
+ * 一级进度只讲人话，完整工具轨迹进二级页面。
+ */
+export const MATCH_STAGES: Array<{ id: string; label: string; detail: string; phases: string[] }> = [
+  { id: 'understand', label: '理解需求', detail: '把你的原话拆成活动、歌曲、目的与安全边界', phases: ['understand'] },
+  { id: 'search', label: '寻找同场用户', detail: '只读取授权画像，并在这一场的观众里找人', phases: ['profile', 'search'] },
+  { id: 'score', label: '计算同频度', detail: '先跑确定性安全硬条件，再按四个维度打分', phases: ['safety', 'rank'] },
+  { id: 'plan', label: '生成组队方案', detail: '给出带证据的推荐理由与公开集合建议', phases: ['plan'] },
+]
+
+export interface MatchStage {
+  id: string
+  label: string
+  detail: string
+  state: 'pending' | 'done' | 'failed'
+  steps: ToolTrace[]
+}
+
+export function stagesOf(trace: ToolTrace[]): MatchStage[] {
+  const phases = phasesOf(trace)
+  return MATCH_STAGES.map((stage) => {
+    const steps = phases.filter((phase) => stage.phases.includes(phase.id)).flatMap((phase) => phase.steps)
+    const state: MatchStage['state'] = steps.length === 0
+      ? 'pending'
+      : steps.every((step) => step.status === 'ok' || step.status === 'fallback')
+        ? 'done'
+        : 'failed'
+    return { id: stage.id, label: stage.label, detail: stage.detail, state, steps }
   })
 }
 
@@ -229,6 +276,33 @@ interface RunArgs {
   scenario: 'normal' | 'slow' | 'error'
   intentOverride?: ParsedIntent | null
   onStep?: (trace: ToolTrace) => void
+  /** 统一适配层：由调用方（services/agent/agentRun）注入，页面不直接调用任何 SDK。 */
+  provider?: AgentProvider
+  /** 本次任务的唯一 runId；同一 runId 只会被执行一次。 */
+  runId?: string
+  /** 外部取消信号（组件卸载 / 用户重新运行）。 */
+  signal?: AbortSignal
+  /** 整体超时时刻（毫秒时间戳）。超过后本步骤直接失败，不再继续。 */
+  deadline?: number
+}
+
+/** 每一步最多重试 1 次；超时或取消不再重试。 */
+const STEP_MAX_RETRY = 1
+
+function sleepUntilAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) return sleep(ms)
+  if (signal.aborted) return Promise.reject(new AgentRunAbortedError('本次运行已取消'))
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    function onAbort() {
+      clearTimeout(timer)
+      reject(new AgentRunAbortedError('本次运行已取消'))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 function sleep(ms: number): Promise<void> {
@@ -237,8 +311,11 @@ function sleep(ms: number): Promise<void> {
 
 export async function runAgent(args: RunArgs): Promise<AgentState> {
   const { eventId, text, scopes, demoCase, scenario } = args
+  const signal = args.signal
+  const deadline = args.deadline ?? Date.now() + AGENT_RUN_TIMEOUT_MS
+  const provider = args.provider
   const state = emptyAgentState()
-  state.sessionId = 'mock-' + Math.random().toString(16).slice(2, 10) + Date.now().toString(16).slice(-4)
+  state.sessionId = args.runId ?? 'mock-' + Math.random().toString(16).slice(2, 10) + Date.now().toString(16).slice(-4)
   state.eventId = eventId
   state.rawIntent = text
   state.authorizedScopes = scopes
@@ -247,7 +324,28 @@ export async function runAgent(args: RunArgs): Promise<AgentState> {
   state.createdAt = Date.now()
   state.provider = PROVIDER_INFO
 
-  const pace = scenario === 'slow' ? 3.2 : 1
+  // slow 只用于"弱网加载态"演示：6 步 × 800ms ≈ 4.8s，必须留在整体 10 秒超时内。
+  const pace = scenario === 'slow' ? 1.6 : 1
+
+  const assertAlive = (): void => {
+    if (signal?.aborted) throw new AgentRunAbortedError('本次运行已取消')
+    if (Date.now() > deadline) throw new AgentRunTimeoutError('Agent 运行超过 10 秒，已自动中止')
+  }
+
+  /** 任何一步最多重试 1 次；取消 / 超时不再重试。 */
+  const retryOnce = async <T,>(fn: () => Promise<T> | T): Promise<T> => {
+    let lastError: unknown = null
+    for (let attempt = 0; attempt <= STEP_MAX_RETRY; attempt += 1) {
+      assertAlive()
+      try {
+        return await fn()
+      } catch (error) {
+        if (error instanceof AgentRunAbortedError || error instanceof AgentRunTimeoutError) throw error
+        lastError = error
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error('Agent 步骤执行失败')
+  }
 
   const record = async (
     name: string,
@@ -255,7 +353,9 @@ export async function runAgent(args: RunArgs): Promise<AgentState> {
     outputSummary: string,
     options: { status?: ToolTrace['status']; usedFallback?: boolean; cost?: number } = {},
   ): Promise<ToolTrace> => {
-    await sleep(Math.round((options.cost ?? 260) * pace))
+    assertAlive()
+    await sleepUntilAbort(Math.round(MOCK_STEP_DELAY_MS * pace), signal)
+    assertAlive()
     const step: ToolTrace = {
       name,
       label: toolLabel(name),
@@ -263,7 +363,7 @@ export async function runAgent(args: RunArgs): Promise<AgentState> {
       status: options.status ?? 'ok',
       inputSummary,
       outputSummary,
-      durationMs: Math.round((options.cost ?? 260) * (0.7 + Math.random() * 0.6)),
+      durationMs: Math.round(MOCK_STEP_DELAY_MS * (0.85 + Math.random() * 0.3)),
       usedFallback: options.usedFallback ?? false,
       error: '',
     }
@@ -276,8 +376,10 @@ export async function runAgent(args: RunArgs): Promise<AgentState> {
   const viewer = viewerFacts(scopes)
   const social = viewerSocial()
 
-  // 1. 理解意图
-  const parsed = args.intentOverride ?? ruleParseIntent(text, eventId, social.gender, viewer.ageBand)
+  // 1. 理解意图（mock 走本地规则；接口由统一适配层提供）
+  const parsed = args.intentOverride ?? await retryOnce(() => provider
+    ? provider.parseIntent({ text, eventId, userId: social.userId, scopes })
+    : ruleParseIntent(text, eventId, social.gender, viewer.ageBand))
   const forceFallback = demoCase === 'ai_fallback' || scenario === 'error'
   await record(
     'parse_social_intent',
@@ -308,7 +410,9 @@ export async function runAgent(args: RunArgs): Promise<AgentState> {
       + ` · 歌单标签 ${profile.playlistTags.length} 个`,
     { cost: 300 },
   )
-  state.musicProfile = getMusicProfile(social.userId, scopes)
+  state.musicProfile = await retryOnce(() => provider
+    ? provider.buildMusicProfile({ userId: social.userId, scopes })
+    : getMusicProfile(social.userId, scopes))
 
   // 3. 读取演出上下文
   const concert = getEventContext(eventId)
@@ -319,24 +423,20 @@ export async function runAgent(args: RunArgs): Promise<AgentState> {
     return state
   }
   state.evidence = []
-  await record(
-    'get_event_context',
-    `event_id=${eventId}`,
-    `${concert.title} · ${concert.artist} · ${concert.city}${concert.venue}；同场标记同频意愿的观众 ${attendeesOf(eventId).length} 人`
-      + `；公开集合点：${concert.meetingPoint.name}`,
-    { cost: 220 },
-  )
 
   // 4. 检索同场候选人
-  const pool = attendeesOf(eventId)
-    .map((user) => candidateFacts(user.id, ALL_SCOPES))
-    .filter((item): item is CandidateFacts => Boolean(item))
+  const pool = await retryOnce<CandidateFacts[]>(() => provider
+    ? provider.searchCandidates({ eventId, userId: social.userId, scopes })
+    : attendeesOf(eventId)
+        .map((user) => candidateFacts(user.id, ALL_SCOPES))
+        .filter((item): item is CandidateFacts => Boolean(item)))
   state.candidateIds = pool.map((item) => item.userId)
   await record(
     'search_same_event_candidates',
-    `event_id=${eventId}，同场观众 ${attendeesOf(eventId).length} 人`,
-    `同场候选池 ${pool.length} 人：${pool.slice(0, 4).map((item) => item.nickname).join('、')}${pool.length > 4 ? '…' : ''}`,
-    { cost: 520 },
+    `event_id=${eventId}；演出：${concert.title} · ${concert.artist} · ${concert.venue}`,
+    `同场候选池 ${pool.length} 人：${pool.slice(0, 4).map((item) => item.nickname).join('、')}${pool.length > 4 ? '…' : ''}`
+      + `；公开集合点：${concert.meetingPoint.name}`,
+    { cost: 500 },
   )
 
   const intent: ParsedIntent = demoCase === 'safety_no_match'
@@ -344,21 +444,27 @@ export async function runAgent(args: RunArgs): Promise<AgentState> {
     : parsed
   if (demoCase === 'safety_no_match') state.parsedIntent = intent
 
-  // 5. 执行安全硬约束
-  const excluded: ExcludedCandidate[] = []
-  const kept: CandidateFacts[] = []
-  for (const candidate of pool) {
-    const reason = checkHardConstraints({
-      viewer,
-      intent,
-      candidate,
-      eventId,
-      blockedUserIds: social.blockedUserIds,
-      reportedUserIds: social.reportedUserIds,
-    })
-    if (reason) excluded.push(reason)
-    else kept.push(candidate)
-  }
+  // 5. 执行安全硬约束（确定性过滤，永远不交给大模型自由判断）
+  const safety = await retryOnce(() => {
+    if (provider) return provider.filterBySafety({ viewer, intent, candidates: pool, eventId })
+    const localExcluded: ExcludedCandidate[] = []
+    const localKept: CandidateFacts[] = []
+    for (const candidate of pool) {
+      const reason = checkHardConstraints({
+        viewer,
+        intent,
+        candidate,
+        eventId,
+        blockedUserIds: social.blockedUserIds,
+        reportedUserIds: social.reportedUserIds,
+      })
+      if (reason) localExcluded.push(reason)
+      else localKept.push(candidate)
+    }
+    return { kept: localKept, excluded: localExcluded }
+  })
+  const kept = safety.kept
+  const excluded = safety.excluded
   state.excludedCandidates = excluded
   state.candidateIds = kept.map((item) => item.userId)
 
@@ -387,13 +493,22 @@ export async function runAgent(args: RunArgs): Promise<AgentState> {
     return state
   }
 
-  // 6. 计算同频程度
-  const ranked = rankCandidates(viewer, intent, kept)
+  // 6. Agent 结构化协商：只交换匿名结构字段，不做自由聊天
+  const negotiation = await retryOnce(() => (provider && kept.length > 0)
+    ? provider.negotiateCandidate({ eventId, viewer, candidate: kept[0], intent })
+    : null)
+  await record(
+    'agent_negotiation',
+    `与 ${kept.length} 位候选做匿名结构化协商：${A2A_TOOLS.length} 项核验（同场 / 到场计划 / 音乐画像 / 社交意图 / 人数 / 安全边界 / 冲突）`,
+    `完成 ${kept.length} 轮结构化协商；未交换真实姓名、联系方式、精确位置或原始听歌历史`
+      + (negotiation ? `；核验项：${negotiation.note}` : ''),
+    { cost: 500 },
+  )
+
+  // 7. 生成 3 位候选人：打分 + 组队方案 + 带证据的推荐理由
+  const ranked = rankCandidates(viewer, intent, kept).slice(0, MOCK_CANDIDATE_LIMIT)
   state.rankedCandidates = ranked
   state.handshakeReports = Object.fromEntries(ranked.map((item) => [item.userId, generateHandshakeReport(state, item)]))
-  for (const name of A2A_TOOLS) {
-    await record(name, '仅交换匿名结构字段', `${name} 完成；未交换真实姓名、联系方式、精确位置或原始听歌历史`, { cost: 70 })
-  }
   const evidence: Array<MatchEvidence & { userId?: string; nickname?: string }> = []
   const seen = new Set<string>()
   for (const item of ranked) {
@@ -405,12 +520,6 @@ export async function runAgent(args: RunArgs): Promise<AgentState> {
     }
   }
   state.evidence = evidence
-  await record(
-    'rank_candidates',
-    `候选 ${kept.length} 人，权重：音乐偏好 40% + 演出期待 25% + 社交目的 20% + 交流与安全 15%`,
-    `为 ${ranked.length} 位候选人打了分，最高分 ${ranked[0].score}（${ranked[0].candidate.nickname}），共生成 ${ranked[0].evidence.length} 条证据`,
-    { cost: 420 },
-  )
 
   // 7. 生成组队方案
   const qualifying = ranked.filter((item) => item.score >= QUALIFY_MIN_SCORE)
@@ -442,9 +551,7 @@ export async function runAgent(args: RunArgs): Promise<AgentState> {
     }
     groupSummary = `组队方案：${members.length} 人（${members.map((member) => member.nickname).join('、')}）${shrunk ? '，已缩小规模' : ''}`
   }
-  await record('build_group', `期望 ${intent.groupSize} 人，候选 ${qualifying.length} 人达到阈值`, groupSummary, { cost: 300 })
-
-  // 8. 生成有证据的理由
+  // 6.1 生成有证据的理由（引用校验不通过就退化成短句，绝不编造）
   let grounded = 0
   for (const item of ranked) {
     const reason = reasonFor(item)
@@ -460,11 +567,22 @@ export async function runAgent(args: RunArgs): Promise<AgentState> {
   }
   state.status = 'pending_confirmation'
   state.updatedAt = Date.now()
+  const icebreakers = await retryOnce(() => provider
+    ? provider.generateIcebreakers({
+        concertId: eventId,
+        concertTitle: concert.title,
+        artist: concert.artist,
+        sharedSongs: ranked[0]?.sharedSongs ?? [],
+        purposes: intent.purposes,
+      })
+    : Promise.resolve([] as string[]))
   await record(
-    'generate_grounded_reason',
-    `对 ${ranked.length} 位候选人的 evidence 做引用校验`,
-    `为 ${grounded} 位候选人生成了带证据的推荐理由；推荐首位：${ranked[0].candidate.nickname}（${ranked[0].score} 分）`,
-    { cost: 260 },
+    'generate_candidates',
+    `候选 ${kept.length} 人，权重：音乐偏好 40% + 演出期待 25% + 社交目的 20% + 交流与安全 15%`,
+    `生成 ${ranked.length} 位同频候选人，最高分 ${ranked[0].score}（${ranked[0].candidate.nickname}），`
+      + `${grounded} 位附带了可核验的推荐理由；${groupSummary}`
+      + (icebreakers.length ? `；已准备 ${icebreakers.length} 条破冰话题` : ''),
+    { cost: 500 },
   )
 
   state.phases = phasesOf(state.trace)

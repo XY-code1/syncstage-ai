@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { cn } from '../lib/cn'
+import { MATCH_STAGES } from '../lib/agentMock'
 import { AlertIcon, CheckIcon, CloseIcon, InfoIcon, RefreshIcon, SparkleIcon } from './icons'
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'warm'
@@ -68,7 +69,7 @@ export function Card({
     <div
       className={cn(
         'glass-card rounded-card p-4',
-        glow && 'shadow-[0_18px_50px_-30px_rgba(49,194,124,0.9)]',
+        glow && 'shadow-[0_14px_36px_-32px_rgba(49,194,124,0.7)]',
         className,
       )}
     >
@@ -331,16 +332,15 @@ export function Sheet({
   )
 }
 
-const FLOW_STEPS = ['授权', '需求确认', '执行', '结果邀请', '房间']
-
+/** 任务进度条：与 Agent 匹配的四阶段保持一致（理解需求 → 寻找同场用户 → 计算同频度 → 生成组队方案） */
 export function ProgressSteps({ current }: { current: number }) {
   return (
     <div className='flex items-center gap-1.5'>
-      {FLOW_STEPS.map((step, index) => {
+      {MATCH_STAGES.map((stage, index) => {
         const done = index < current
         const active = index === current
         return (
-          <div key={step} className='flex flex-1 flex-col items-center gap-1'>
+          <div key={stage.id} className='flex flex-1 flex-col items-center gap-1'>
             <div
               className={cn(
                 'h-1 w-full rounded-full transition',
@@ -349,11 +349,11 @@ export function ProgressSteps({ current }: { current: number }) {
             />
             <span
               className={cn(
-                'text-[10px] tracking-wide',
+                'whitespace-nowrap text-[10px] tracking-wide',
                 active ? 'text-brand-300' : done ? 'text-white/45' : 'text-white/25',
               )}
             >
-              {step}
+              {stage.label}
             </span>
           </div>
         )

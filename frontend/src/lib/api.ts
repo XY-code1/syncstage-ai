@@ -7,7 +7,6 @@ import type {
   AgentState,
   AuthorizationScope,
   Concert,
-  DemoCase,
   DemoScenario,
   DemoUser,
   MemoryCardData,
@@ -17,22 +16,20 @@ import type {
   RoomState,
   RoomTask,
 } from '../types'
-import { createRoomState, feedbackState, inviteState, peerConfirmState, runAgent } from './agentMock'
+import { createRoomState, feedbackState, inviteState, peerConfirmState } from './agentMock'
+import { getAgentProvider, readAgentMode } from '../services/agent/agentProvider'
+import { AgentNotConfiguredError } from '../services/agent/agentTypes'
+import { probeLiveAvailability } from '../services/agent/liveAgentProvider'
 import { buildMemoryCard } from './content'
+import { API_BASE, ApiError, apiRequest, fetchAiStatus } from './http'
 import { MOCK_DISCLAIMER, PROVIDER_INFO, getMusicProfile } from './tmeMock'
 
-export class ApiError extends Error {
-  code: string
-
-  constructor(message: string, code = 'UNKNOWN') {
-    super(message)
-    this.name = 'ApiError'
-    this.code = code
-  }
-}
+// HTTP 层（fetch + 超时 + 错误归一化）已抽到 ./http，这里只做转发，
+// 避免 services/agent 与本文件互相 import 形成循环依赖。
+export { API_BASE, ApiError, apiRequest, fetchAiStatus }
+export type { ApiErrorOptions, AiStatus, RequestOptions } from './http'
 
 const FORCED_MODE = import.meta.env.VITE_USE_MOCK_API
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 
 let scenario: DemoScenario = 'normal'
 let resolvedMode: 'mock' | 'backend' | null = FORCED_MODE === 'true' ? 'mock' : FORCED_MODE === 'false' ? 'backend' : null
@@ -70,30 +67,7 @@ export async function resolveDataMode(): Promise<'mock' | 'backend'> {
   return resolvedMode
 }
 
-interface RequestOptions {
-  method?: 'GET' | 'POST'
-  body?: unknown
-}
-
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body } = options
-  try {
-    const response = await fetch(API_BASE + path, {
-      method,
-      headers: body ? { Accept: 'application/json', 'Content-Type': 'application/json' } : { Accept: 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
-    })
-    if (!response.ok) {
-      const detail = await response.json().catch(() => null)
-      const message = (detail && typeof detail.detail === 'string' && detail.detail) || '后端返回了 ' + response.status
-      throw new ApiError(message, 'HTTP')
-    }
-    return (await response.json()) as T
-  } catch (error) {
-    if (error instanceof ApiError) throw error
-    throw new ApiError('无法连接后端服务，请确认后端已启动', 'NETWORK')
-  }
-}
+const request = apiRequest
 
 // ---------------------------------------------------------------------------
 // 演出与音乐数据
@@ -147,76 +121,34 @@ export async function parseIntentRequest(args: {
   scopes: AuthorizationScope[]
   userId: string
 }): Promise<ParseIntentResult> {
-  const mode = await resolveDataMode()
-  if (mode === 'backend') {
-    const data = await request<{ parsedIntent: ParsedIntent; usedFallback: boolean; provider: ProviderInfo }>(
-      '/api/agent/intent/parse',
-      {
-        method: 'POST',
-        body: { text: args.text, eventId: args.eventId, userId: args.userId, authorizedScopes: args.scopes },
-      },
-    )
-    return { parsedIntent: data.parsedIntent, usedFallback: data.usedFallback, provider: data.provider }
+  // 意图解析同样只走统一适配层：mock 用本地规则，live 调后端（后端再调大模型）。
+  const provider = getAgentProvider(readAgentMode())
+  if (provider.mode === 'live') {
+    const availability = await probeLiveAvailability()
+    if (!availability.ok) throw new AgentNotConfiguredError(availability.reason)
   }
-
-  await delay(420)
-  const { ruleParseIntent } = await import('./agentMock')
-  const profile = getMusicProfile(args.userId, args.scopes)
-  const parsed = ruleParseIntent(args.text, args.eventId, profile?.gender ?? 'prefer-not-to-say', profile?.ageBand ?? '')
-  return { parsedIntent: parsed, usedFallback: true, provider: PROVIDER_INFO }
-}
-
-export async function startAgent(args: {
-  text: string
-  eventId: string
-  userId: string
-  scopes: AuthorizationScope[]
-  demoCase: DemoCase
-  parsedIntent: ParsedIntent | null
-  onStep?: (step: AgentState['trace'][number]) => void
-}): Promise<AgentState> {
-  const mode = await resolveDataMode()
-  if (mode === 'backend') {
-    // 「页面状态」是演示控制台的表现层开关：即使连上了后端 Agent，
-    // 也要能演示弱网与异常，方便评审现场切换状态。
-    if (scenario === 'error') {
-      await delay(700)
-      throw new ApiError('连接 Agent 服务超时（演示：网络异常）', 'NETWORK')
-    }
-    if (scenario === 'slow') await delay(2400)
-    const state = await request<AgentState>('/api/agent/sessions', {
-      method: 'POST',
-      body: {
-        eventId: args.eventId,
-        userId: args.userId,
-        text: args.text,
-        authorizedScopes: args.scopes,
-        parsedIntent: args.parsedIntent,
-        demoCase: args.demoCase,
-      },
-    })
-    args.onStep?.(state.trace[state.trace.length - 1])
-    return state
-  }
-
-  try {
-    return await runAgent({
-      eventId: args.eventId,
-      userId: args.userId,
-      text: args.text,
-      scopes: args.scopes,
-      demoCase: args.demoCase,
-      scenario,
-      intentOverride: args.parsedIntent,
-      onStep: args.onStep,
-    })
-  } catch (error) {
-    throw error instanceof ApiError ? error : new ApiError('Agent 执行失败，请稍后重试', 'AGENT')
+  const parsedIntent = await provider.parseIntent({
+    text: args.text,
+    eventId: args.eventId,
+    userId: args.userId,
+    scopes: args.scopes,
+    intent: null,
+  })
+  return {
+    parsedIntent,
+    usedFallback: provider.isDemo,
+    provider: provider.isDemo ? { ...PROVIDER_INFO, notice: MOCK_DISCLAIMER } : { ...PROVIDER_INFO, isDemo: false, notice: provider.notice },
   }
 }
 
-export async function inviteAgent(state: AgentState, candidateId: string): Promise<AgentState> {
-  if ((await resolveDataMode()) === 'backend') {
+/**
+ * Agent 运行时的数据通道。由运行模式决定，不由"后端是否在线"决定：
+ * mock 模式下所有确认/建房都走本地状态，绝不偷偷请求后端（也就不可能调用大模型）。
+ */
+export type AgentTransport = 'mock' | 'backend'
+
+export async function inviteAgent(state: AgentState, candidateId: string, transport: AgentTransport): Promise<AgentState> {
+  if (transport === 'backend') {
     return request<AgentState>(`/api/agent/sessions/${state.sessionId}/invite`, {
       method: 'POST',
       body: { candidateId },
@@ -226,8 +158,8 @@ export async function inviteAgent(state: AgentState, candidateId: string): Promi
   return inviteState(state, candidateId)
 }
 
-export async function peerConfirmAgent(state: AgentState, accept: boolean): Promise<AgentState> {
-  if ((await resolveDataMode()) === 'backend') {
+export async function peerConfirmAgent(state: AgentState, accept: boolean, transport: AgentTransport): Promise<AgentState> {
+  if (transport === 'backend') {
     return request<AgentState>(`/api/agent/sessions/${state.sessionId}/peer-confirm`, {
       method: 'POST',
       body: { accept },
@@ -242,8 +174,8 @@ export interface CreateRoomResult {
   room: RoomState | null
 }
 
-export async function createRoomAgent(state: AgentState): Promise<CreateRoomResult> {
-  if ((await resolveDataMode()) === 'backend') {
+export async function createRoomAgent(state: AgentState, transport: AgentTransport): Promise<CreateRoomResult> {
+  if (transport === 'backend') {
     const next = await request<AgentState>(`/api/agent/sessions/${state.sessionId}/room`, { method: 'POST' })
     return { state: next, room: (next.room as unknown as RoomState) ?? null }
   }
@@ -252,8 +184,8 @@ export async function createRoomAgent(state: AgentState): Promise<CreateRoomResu
   return { state: outcome.state, room: outcome.room }
 }
 
-export async function feedbackAgent(state: AgentState, rating: string, tags: string[], comment: string): Promise<AgentState> {
-  if ((await resolveDataMode()) === 'backend') {
+export async function feedbackAgent(state: AgentState, rating: string, tags: string[], comment: string, transport: AgentTransport): Promise<AgentState> {
+  if (transport === 'backend') {
     return request<AgentState>(`/api/agent/sessions/${state.sessionId}/feedback`, {
       method: 'POST',
       body: { rating, tags, comment },
@@ -325,3 +257,78 @@ export async function submitReport(reason: string, userId: string | null): Promi
   void userId
   return { ok: true }
 }
+
+// ---------------------------------------------------------------------------
+// 真实大模型对话（ChatRoom）
+// 注意：这里不做任何 mock 回退。后端不可用或模型失败时必须抛错，由 UI 展示失败原因。
+// ---------------------------------------------------------------------------
+
+export interface ChatSuggestion {
+  title: string
+  place: string
+  time: string
+  note: string
+}
+
+export interface AgentChatReply {
+  reply: string
+  suggestion: ChatSuggestion | null
+  source: 'model' | 'demo-fallback'
+  agentName: string
+  model: string
+  elapsedMs: number
+  finishReason: string
+  requestId: string
+  parseWarning: string | null
+  fallbackReason?: string
+  usage?: Record<string, number | null>
+}
+
+export interface AgentChatTurn {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface AgentChatRequestInput {
+  threadId: string
+  threadKind: 'agent' | 'group' | 'dm' | 'system'
+  concertId: string
+  roomId?: string | null
+  peerName?: string | null
+  messages: AgentChatTurn[]
+}
+
+/** 真实大模型对话：超时给足 90 秒，失败会抛出带 code / hint 的 ApiError。 */
+export async function sendAgentChat(payload: AgentChatRequestInput): Promise<AgentChatReply> {
+  // 开发环境打印完整链路，便于对照后端 [llm:chat] 日志定位问题：
+  // 前端发出 -> 后端 -> 大模型 -> 返回（source 必须是 model，绝不是本地模板）。
+  if (import.meta.env.DEV) {
+    console.info(
+      `[agent-chat] → ${API_BASE}/api/agent/chat kind=${payload.threadKind} concert=${payload.concertId}`
+        + ` room=${payload.roomId ?? '-'} messages=${payload.messages.length}`,
+    )
+  }
+  const startedAt = Date.now()
+  try {
+    const reply = await request<AgentChatReply>('/api/agent/chat', { method: 'POST', body: payload, timeoutMs: 90000 })
+    if (import.meta.env.DEV) {
+      console.info(
+        `[agent-chat] ← source=${reply.source} model=${reply.model} elapsedMs=${reply.elapsedMs}`
+          + ` requestId=${reply.requestId} chars=${reply.reply.length} parseWarning=${reply.parseWarning ?? '-'}`,
+      )
+    }
+    return reply
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn(
+        `[agent-chat] ✗ waitedMs=${Date.now() - startedAt} code=${error instanceof ApiError ? error.code : 'UNKNOWN'}`
+          + ` status=${error instanceof ApiError ? error.status : null}`
+          + ` message=${error instanceof Error ? error.message : String(error)}`
+          + ` hint=${error instanceof ApiError ? error.hint : ''}`
+          + ` detail=${error instanceof ApiError ? error.detail : ''}`,
+      )
+    }
+    throw error
+  }
+}
+

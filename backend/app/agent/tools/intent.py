@@ -13,7 +13,7 @@ from typing import Any
 from app.agent.state import ParsedIntent
 from app.agent.tools.registry import ToolContext, ToolResult
 from app.config import settings
-from app.services.ai_client import chat_json
+from app.services.ai_client import chat_json_result
 
 PURPOSE_KEYWORDS: dict[str, tuple[str, ...]] = {
     '副歌一起唱': ('副歌', '合唱', '一起唱', '跟着唱', '唱出来', '大合唱'),
@@ -196,17 +196,20 @@ async def run(
         note = '本次演示指定"大模型不可用"，直接使用本地规则解析（fallback）'
 
     if settings.ai_enabled and not force_fallback:
-        ai_payload = await chat_json(
+        call = await chat_json_result(
             INTENT_SYSTEM_PROMPT,
             json.dumps({'text': body, 'eventId': parsed.event_id}, ensure_ascii=False),
+            purpose='intent',
         )
-        if isinstance(ai_payload, dict):
-            parsed = _merge_model(parsed, ai_payload)
+        if isinstance(call.payload, dict):
+            parsed = _merge_model(parsed, call.payload)
             used_fallback = False
             status = 'ok'
-            note = '大模型解析成功'
+            elapsed = call.result.elapsed_ms if call.result else 0
+            note = '大模型解析成功（' + str(elapsed) + 'ms）'
         else:
-            note = '大模型调用失败或超时，已回退到本地规则解析'
+            reason = call.error.code if call.error else 'bad_response'
+            note = '大模型调用失败（' + reason + '），已回退到本地规则解析'
 
     ctx.state.parsed_intent = parsed
     ctx.state.status = 'intent_parsed'

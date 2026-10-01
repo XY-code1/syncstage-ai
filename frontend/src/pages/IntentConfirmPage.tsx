@@ -45,7 +45,7 @@ export function IntentConfirmPage() {
     if (!intent) return
     setStarting(true)
     saveParsedIntent(intent)
-    navigate(`/concert/${concertId}/agent`)
+    navigate(`/concert/${concertId}/running`)
     void runAgent({ intent })
     setStarting(false)
   }
@@ -53,14 +53,14 @@ export function IntentConfirmPage() {
   if (!intent) {
     return (
       <div className='flex min-h-screen flex-col'>
-        <QQMusicBar title='确认 Agent 的理解' onBack={() => navigate(`/concert/${concertId}/intent`)} />
+        <QQMusicBar title='确认 Agent 的理解' onBack={() => navigate(`/concert/${concertId}/task`)} />
         <main className='flex-1 px-4 pt-4'>
           <StateView
             status='empty'
             title='还没有可以确认的意图'
             description='先写一句你的需求，Agent 才能给出结构化理解。'
             actionLabel='去写需求'
-            onAction={() => navigate(`/concert/${concertId}/intent`)}
+            onAction={() => navigate(`/concert/${concertId}/task`)}
           />
         </main>
       </div>
@@ -69,7 +69,7 @@ export function IntentConfirmPage() {
 
   return (
     <div className='flex min-h-screen flex-col'>
-      <QQMusicBar title='确认 Agent 的理解' subtitle='一起去现场 · 下面每一项都可以改' onBack={() => navigate(`/concert/${concertId}/intent`)} right={<DemoBadge label='Agent 解析' />} />
+      <QQMusicBar title='确认 Agent 的理解' subtitle='一起去现场 · 下面每一项都可以改' onBack={() => navigate(`/concert/${concertId}/task`)} right={<DemoBadge label='Agent 解析' />} />
 
       <main className='flex-1 px-4 pb-40 pt-4'>
         <div className='flex flex-col gap-5'>
