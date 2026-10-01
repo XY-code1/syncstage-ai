@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.db import init_db
 from app.demo_data import DEMO_NOTICE
-from app.routers import agent, ai, concerts, health, matching, safety
+from app.routers import agent, agent_run, ai, concerts, health, matching, safety
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s')
 
@@ -32,9 +32,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# 本地开发允许任意 localhost / 127.0.0.1 端口（Vite 换端口时不用改配置）
+LOCAL_ORIGIN_REGEX = r'^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$'
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(settings.cors_origins),
+    allow_origin_regex=LOCAL_ORIGIN_REGEX,
     allow_credentials=False,
     allow_methods=['GET', 'POST', 'OPTIONS'],
     allow_headers=['*'],
@@ -42,6 +46,8 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(agent.router)
+# 厂商无关的 Agent 真实调用链（/api/agent/parse-intent | /run | /runs/{id}）
+app.include_router(agent_run.router)
 app.include_router(concerts.router)
 app.include_router(matching.router)
 app.include_router(ai.router)
