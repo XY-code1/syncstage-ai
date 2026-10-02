@@ -8,6 +8,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 coverage/
+playwright-report/
+test-results/
 
 # ---- Python / backend ----
 __pycache__/
@@ -35,6 +37,9 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 tmp/
+temp/
+*.tmp
+*.temp
 *.log
 logs/
 *.pem

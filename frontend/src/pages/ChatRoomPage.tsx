@@ -15,6 +15,7 @@ import {
   StopIcon,
 } from '../components/icons'
 import { Button, Sheet } from '../components/ui'
+import { sendAgentChat } from '../lib/api'
 import { cn } from '../lib/cn'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { useProfile } from '../store/profile'
@@ -24,6 +25,9 @@ import type { ChatMessage } from '../store/social'
 
 const REPORT_REASONS = ['包含敏感信息', '骚扰或不当言论', '诱导私下转账', '其它原因']
 
+/** Agent 润色面板的状态：只会把结果填进输入框，绝不自动发送。 */
+type PolishState = { status: 'idle' | 'loading' | 'done' | 'error'; text: string; error: string }
+
 const VOICE_HELP: Record<string, string> = {
   unsupported: '当前浏览器不支持语音识别，请使用桌面版 Chrome / Edge',
   denied: '麦克风权限被拒绝，请在地址栏的权限设置里重新允许',
@@ -32,13 +36,16 @@ const VOICE_HELP: Record<string, string> = {
 export function ChatRoomPage() {
   const { threadId = '' } = useParams()
   const navigate = useNavigate()
-  const { threadOf, messagesOf, send, retry, markRead, acceptCard, agentStateOf } = useSocial()
+  const { threadOf, messagesOf, send, retry, markRead, acceptCard, agentStateOf, simulatePeerReply } = useSocial()
   const { profile } = useProfile()
-  const { pushToast, room } = useSession()
+  const { pushToast, room, concertId } = useSession()
   const [input, setInput] = useState('')
   const [voiceOpen, setVoiceOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<ChatMessage | null>(null)
   const [reportReason, setReportReason] = useState('')
+  const [polishOpen, setPolishOpen] = useState(false)
+  const [polishSource, setPolishSource] = useState('')
+  const [polish, setPolish] = useState<PolishState>({ status: 'idle', text: '', error: '' })
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const thread = threadOf(threadId)
@@ -67,6 +74,45 @@ export function ChatRoomPage() {
 
   const readOnly = thread?.kind === 'system'
   const thinking = agentState.status === 'sending' || agentState.status === 'thinking'
+  // 真人与真人的私聊：不接任何 AI 自动回复，只推进"发送中 → 已送达 → 等待对方回复"。
+  const isDirect = thread?.kind === 'dm'
+  // 「触发模拟回复」只出现在真人私聊里：本构建的所有联系人都来自本地虚构 Demo 数据，
+  // 触发出来的消息一定带「模拟联系人」标记，绝不冒充真人、也不冒充模型。
+  const demoMode = isDirect
+  const lastMessage = [...messages].reverse().find((message) => !message.system)
+  const waitingReply = Boolean(isDirect && lastMessage?.mine && !lastMessage?.pending)
+
+  const runPolish = async (source: string) => {
+    setPolish({ status: 'loading', text: '', error: '' })
+    try {
+      const reply = await sendAgentChat({
+        threadId,
+        threadKind: 'agent',
+        concertId: room?.concertId || concertId,
+        messages: [
+          {
+            role: 'user',
+            content:
+              `请帮我润色下面这条准备发给「${thread?.title ?? '同行者'}」的消息：保持原意、口语自然、不超过 60 字，` +
+              '不要替我添加没说过的事。只输出润色后的那句话，不要解释、不要加引号。\n\n' +
+              source,
+          },
+        ],
+      })
+      const text = reply.reply.trim()
+      if (!text) {
+        setPolish({ status: 'error', text: '', error: '模型没有返回可用内容，请重试' })
+        return
+      }
+      setPolish({ status: 'done', text, error: '' })
+    } catch (error) {
+      setPolish({
+        status: 'error',
+        text: '',
+        error: error instanceof Error ? error.message : '润色失败，请稍后重试',
+      })
+    }
+  }
 
   const submit = () => {
     const text = input.trim()
@@ -122,6 +168,8 @@ export function ChatRoomPage() {
           />
         ))}
 
+        {waitingReply && !thinking ? <StatusLine label='等待对方回复' /> : null}
+
         {agentState.status === 'sending' ? (
           <StatusLine label='消息已发出' />
         ) : null}
@@ -169,6 +217,41 @@ export function ChatRoomPage() {
           />
         ) : null}
 
+        {isDirect ? (
+          <div className='mb-2 flex items-center gap-2'>
+            <button
+              type='button'
+              onClick={() => {
+                const draft = input.trim()
+                if (!draft) {
+                  pushToast('先写一句话，Agent 才能帮你润色', 'warn')
+                  return
+                }
+                setPolishSource(draft)
+                setPolish({ status: 'idle', text: '', error: '' })
+                setPolishOpen(true)
+                void runPolish(draft)
+              }}
+              className='flex min-h-9 items-center gap-1.5 rounded-pill border border-brand-500/35 bg-brand-500/10 px-3 text-[12.5px] text-brand-200'
+            >
+              <SparkleIcon className='h-3.5 w-3.5' />
+              让 Agent 帮我润色
+            </button>
+            {demoMode ? (
+              <button
+                type='button'
+                onClick={() => {
+                  simulatePeerReply(threadId)
+                  pushToast('已触发一条模拟联系人回复（Demo 演示）', 'warn')
+                }}
+                className='flex min-h-9 items-center gap-1.5 rounded-pill border border-warm-400/35 bg-warm-400/10 px-3 text-[12.5px] text-warm-400'
+              >
+                触发模拟回复
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
         {readOnly ? (
           <p className='pb-1 text-center text-[10.5px] text-white/35'>系统通知为只读</p>
         ) : (
@@ -212,10 +295,67 @@ export function ChatRoomPage() {
             </button>
           </div>
         )}
-        <p className='pt-2 text-center text-[10px] text-white/30'>
-          不交换私人联系方式 · Agent 回复由真实大模型生成 · 活动结束 24 小时后房间自动归档
+        <p className='pt-2 text-center text-[10.5px] leading-relaxed text-white/35'>
+          {thread?.kind === 'group'
+            ? '真人对话 · Agent 不参与自动回复 · 不交换私人联系方式'
+            : isDirect
+              ? '真人对话 · 不接入 AI 自动回复 · 不交换私人联系方式'
+              : '不交换私人联系方式 · Agent 回复由真实大模型生成 · 活动结束 24 小时后归档'}
         </p>
       </div>
+
+      <Sheet
+        open={polishOpen}
+        onClose={() => setPolishOpen(false)}
+        title='让 Agent 帮我润色'
+        description='润色结果只会填入输入框，需要你自己确认后再发送'
+      >
+        <div className='space-y-3'>
+          <div className='rounded-2xl border border-white/8 bg-white/[0.03] p-3'>
+            <p className='text-[11.5px] text-white/45'>你写的</p>
+            <p className='mt-1 text-[13.5px] leading-relaxed text-ink-400'>{polishSource}</p>
+          </div>
+          <div className='rounded-2xl border border-brand-500/25 bg-brand-500/[0.07] p-3'>
+            <p className='flex items-center gap-1.5 text-[11.5px] text-brand-200'>
+              <SparkleIcon className='h-3.5 w-3.5' />
+              润色后
+            </p>
+            {polish.status === 'loading' ? (
+              <p className='mt-2 flex items-center gap-2 text-[13px] text-white/60'>
+                <LoaderIcon className='h-4 w-4 animate-spin text-brand-300' />
+                Agent 正在润色…
+              </p>
+            ) : polish.status === 'error' ? (
+              <p className='mt-2 text-[12.5px] leading-relaxed text-rose-200'>{polish.error}</p>
+            ) : (
+              <p className='mt-2 text-[13.5px] leading-relaxed text-ink-100'>{polish.text || '—'}</p>
+            )}
+          </div>
+          <div className='flex items-center gap-2'>
+            <Button
+              size='sm'
+              disabled={polish.status !== 'done'}
+              onClick={() => {
+                if (polish.status !== 'done') return
+                setInput(polish.text)
+                setPolishOpen(false)
+                pushToast('已填入输入框，确认后再发送', 'success')
+              }}
+            >
+              使用这条
+            </Button>
+            <Button size='sm' variant='secondary' disabled={polish.status === 'loading'} onClick={() => void runPolish(polishSource)}>
+              重新润色
+            </Button>
+            <button type='button' className='ml-auto text-[12px] text-white/45' onClick={() => setPolishOpen(false)}>
+              取消
+            </button>
+          </div>
+          <p className='text-[11px] leading-relaxed text-white/35'>
+            这是 Agent 的辅助建议，不会自动发送；发送前内容完全由你决定。
+          </p>
+        </div>
+      </Sheet>
 
       <Sheet
         open={Boolean(reportTarget)}
@@ -407,6 +547,14 @@ function MessageRow({
           )}
           <span>{message.time}</span>
           {message.pending ? <span className='text-white/30'>· 发送中</span> : null}
+          {!message.pending && mine && message.delivery === 'delivered' ? (
+            <span className='text-white/30'>· 已送达</span>
+          ) : null}
+          {message.simulated ? (
+            <span className='rounded-pill border border-warm-400/40 bg-warm-400/12 px-1.5 py-[1px] text-[9px] text-warm-400'>
+              模拟联系人
+            </span>
+          ) : null}
           {message.failed ? <span className='text-rose-300'>· 发送失败</span> : null}
         </div>
         <div
@@ -467,7 +615,7 @@ function MessageRow({
           </div>
         ) : null}
 
-        {mine || agent || message.authorId === 'agent' ? null : (
+        {mine || agent || message.simulated || message.authorId === 'agent' ? null : (
           <button type='button' onClick={onReport} className='mt-1 text-[10px] text-white/25'>
             举报消息
           </button>

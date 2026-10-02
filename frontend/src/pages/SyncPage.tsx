@@ -1,20 +1,72 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Avatar } from '../components/Avatar'
 import { SegmentedTabs, TabHeader } from '../components/TabLayout'
 import { BandPill, EvidenceList, ScoreBars } from '../components/AgentEvidence'
-import { ChevronRightIcon, SparkleIcon, UsersIcon } from '../components/icons'
+import { ChevronRightIcon, ShieldIcon, SparkleIcon, UsersIcon } from '../components/icons'
 import { Button, ScoreRing, Sheet } from '../components/ui'
 import { demoConcerts } from '../data/demoData'
+import { fetchInvitations, type RoomInvitation } from '../lib/api'
+import { DEMO_ROLES, demoModeEnabled, useDemoRole } from '../lib/demoRole'
 import { recommendTeammates, sharedHighlights } from '../lib/recommend'
 import { useSession } from '../store/session'
 import type { ScoredCandidate } from '../types'
 
 export function SyncPage() {
   const navigate = useNavigate()
-  const { agent, room, concertId, selectConcert, scopes } = useSession()
+  const location = useLocation()
+  const { agent, room, concertId, selectConcert, scopes, agentMode, respondInvitation } = useSession()
   const [focusId, setFocusId] = useState(concertId)
   const [detail, setDetail] = useState<ScoredCandidate | null>(null)
+
+  // 对方视角：Demo 双身份（浏览器 B）凭 demoRole 拉取「等待我确认」的同行邀请。
+  const demoRole = useDemoRole(location.search)
+  const demoIdentity = demoModeEnabled() && demoRole ? DEMO_ROLES[demoRole] : null
+  const transport = agentMode === 'live' ? 'backend' as const : 'mock' as const
+  const [invites, setInvites] = useState<RoomInvitation[]>([])
+  const [inviteBusy, setInviteBusy] = useState('')
+
+  useEffect(() => {
+    const userId = demoIdentity?.userId
+    const nickname = demoIdentity?.name ?? ''
+    if (!userId) {
+      setInvites([])
+      return undefined
+    }
+    let cancelled = false
+    const load = () => {
+      void fetchInvitations(userId, nickname, transport)
+        .then((items) => {
+          if (!cancelled) setInvites(items)
+        })
+        .catch(() => {
+          // 后端不可用时保持空列表，绝不本地伪造一条邀请
+        })
+    }
+    load()
+    const timer = window.setInterval(load, 4000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [demoIdentity?.name, demoIdentity?.userId, transport])
+
+  const acceptInvite = async (inviteId: string) => {
+    setInviteBusy(inviteId)
+    const created = await respondInvitation(inviteId, true)
+    setInviteBusy('')
+    if (created) {
+      setInvites((prev) => prev.filter((item) => item.inviteId !== inviteId))
+      navigate(`/concert/${created.concertId}/room`)
+    }
+  }
+
+  const declineInvite = async (inviteId: string) => {
+    setInviteBusy(inviteId)
+    await respondInvitation(inviteId, false)
+    setInviteBusy('')
+    setInvites((prev) => prev.filter((item) => item.inviteId !== inviteId))
+  }
 
   const concert = demoConcerts.find((item) => item.id === focusId) ?? demoConcerts[0]
 
@@ -26,7 +78,7 @@ export function SyncPage() {
   const ongoing = room
     ? { label: '临时同频房间', title: room.concertTitle, hint: `${room.members.length} 位成员 · 已确认 ${room.members.filter((m) => m.confirmed).length}/${room.members.length}`, to: `/concert/${room.concertId}/room` }
     : agent && agent.rankedCandidates.length > 0
-      ? { label: '匹配进行中', title: `Top Match · ${agent.rankedCandidates[0].candidate.nickname}`, hint: `${agent.rankedCandidates.length} 位候选人 · 同频度 ${agent.rankedCandidates[0].score}%`, to: `/concert/${agent.eventId}/matches` }
+      ? { label: agent.pendingConfirmation.status === 'awaiting_peer' ? '等待对方确认' : agent.pendingConfirmation.status === 'declined' ? '对方暂未接受' : agent.pendingConfirmation.status === 'expired' ? '邀请已过期' : '同频匹配结果已就绪', title: `Top Match · ${agent.rankedCandidates[0].candidate.nickname}`, hint: `${agent.rankedCandidates.length} 位候选人 · 同频度 ${agent.rankedCandidates[0].score}%`, to: `/concert/${agent.eventId}/reveal` }
       : null
 
   return (
@@ -34,6 +86,29 @@ export function SyncPage() {
       <TabHeader title='同频' subtitle='先看人，再看演出' />
 
       <div className='px-4 pt-4'>
+        {invites.map((invite) => {
+          const song = invite.sharedSongs[0] ?? '夜航的信'
+          const minutesLeft = invite.expiresAt ? Math.max(0, Math.ceil((invite.expiresAt - Date.now()) / 60000)) : null
+          const busy = inviteBusy === invite.inviteId
+          return (
+            <div key={invite.inviteId} data-invitation={invite.inviteId} className='soft-card mb-3 border border-brand-400/30 p-3.5'>
+              <p className='text-[13.5px] font-semibold text-white'>{invite.fromName}邀请你一起去现场</p>
+              <p className='mt-1 text-[11.5px] text-white/55'>{invite.concertTitle}{invite.venue ? ' · ' + invite.venue : ''}</p>
+              <div className='mt-2 flex flex-wrap gap-1.5'>
+                <span className='rounded-pill border border-brand-500/30 bg-brand-500/[0.08] px-2 py-0.5 text-[10.5px] text-brand-200'>共同曲目：《{song}》</span>
+                {invite.score ? <span className='rounded-pill border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10.5px] text-white/60'>同频度 {invite.score}%</span> : null}
+              </div>
+              {invite.matchReason ? <p className='mt-2 line-clamp-2 text-[11.5px] leading-relaxed text-white/60'>匹配理由：{invite.matchReason}</p> : null}
+              <p className='mt-2 flex items-start gap-1.5 text-[11.5px] leading-relaxed text-white/60'><ShieldIcon className='mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-300' />{invite.meetingPoint ? '公开集合：' + invite.meetingPoint : '只在公开场合见面'}{invite.safety ? ' · ' + invite.safety : ''}</p>
+              <p className='mt-1 text-[10.5px] text-white/35'>{minutesLeft === null ? '邀请有时效，请尽快回应' : minutesLeft > 0 ? '剩余 ' + minutesLeft + ' 分钟有效' : '邀请即将过期'}</p>
+              <div className='mt-3 grid grid-cols-2 gap-2'>
+                <Button variant='secondary' size='sm' disabled={busy} onClick={() => void declineInvite(invite.inviteId)}>暂不同行</Button>
+                <Button size='sm' disabled={busy} onClick={() => void acceptInvite(invite.inviteId)}>{busy ? '处理中…' : '接受同行'}</Button>
+              </div>
+            </div>
+          )
+        })}
+
         {ongoing ? (
           <button
             type='button'

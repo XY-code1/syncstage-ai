@@ -143,6 +143,39 @@ export function stagesOf(trace: ToolTrace[]): MatchStage[] {
   })
 }
 
+/**
+ * 双轨匹配页的 5 个阶段。
+ *
+ * 阶段名按产品要求固定，但顺序严格跟随后端真实的工具流水线
+ * （understand+profile → search → safety → rank → plan），
+ * 这样进度只会单调向前，不会出现后面的阶段先完成的假动画。
+ * 每个阶段只配一句短文案，技术细节全部收进「查看 Agent 工作过程」。
+ */
+export const SYNC_STAGES: Array<{ id: string; label: string; line: string; detail: string; phases: string[] }> = [
+  { id: 'profile', label: '读取需求', line: '只读取你授权的那几类音乐数据', detail: '解析需求 + 读取授权画像', phases: ['understand', 'profile'] },
+  { id: 'search', label: '寻找同场观众', line: '只在同一场演出的观众里找人', detail: '只在这一场演出的观众里检索', phases: ['search'] },
+  { id: 'safety', label: '检查安全边界', line: '按你设的硬条件先筛一遍', detail: '确定性程序先跑安全硬条件', phases: ['safety'] },
+  { id: 'rank', label: '对齐音乐偏好', line: '对齐口味、到场时间与同行方式', detail: '四个维度打分并排序', phases: ['rank'] },
+  { id: 'plan', label: '找到同频者', line: '准备一句可以开口的话题', detail: '生成带证据的推荐理由', phases: ['plan'] },
+]
+
+export interface SyncStage extends MatchStage {
+  line: string
+}
+
+export function syncStagesOf(trace: ToolTrace[]): SyncStage[] {
+  const phases = phasesOf(trace)
+  return SYNC_STAGES.map((stage) => {
+    const steps = phases.filter((phase) => stage.phases.includes(phase.id)).flatMap((phase) => phase.steps)
+    const state: MatchStage['state'] = steps.length === 0
+      ? 'pending'
+      : steps.every((step) => step.status === 'ok' || step.status === 'fallback')
+        ? 'done'
+        : 'failed'
+    return { id: stage.id, label: stage.label, detail: stage.line, line: stage.line, state, steps }
+  })
+}
+
 const PURPOSE_KEYWORDS: Record<Purpose, string[]> = {
   副歌一起唱: ['副歌', '合唱', '一起唱', '跟着唱', '唱出来', '大合唱'],
   一起排队候场: ['排队', '候场', '提前到', '一起等', '进场前'],
@@ -648,6 +681,8 @@ export function inviteState(state: AgentState, candidateId: string): AgentState 
     peerConfirmed: false,
     reason: '需要双方都确认后才创建临时房间',
     nextAction: 'wait_peer',
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 5 * 60 * 1000,
   }
   const step: ToolTrace = {
     name: 'send_mutual_consent_invitation',
@@ -666,13 +701,14 @@ export function inviteState(state: AgentState, candidateId: string): AgentState 
 
 export function peerConfirmState(state: AgentState, accept: boolean): AgentState {
   const pending = state.pendingConfirmation
-  if (!pending.required || !pending.proposerConfirmed) return state
+  if (!pending.required || !pending.proposerConfirmed || pending.status !== 'awaiting_peer') return state
+  if (pending.expiresAt && pending.expiresAt <= Date.now()) return cancelInviteState(state, 'expired')
   return {
     ...state,
     pendingConfirmation: {
       ...pending,
       peerConfirmed: accept,
-      status: accept ? 'both_confirmed' : 'declined',
+      status: accept ? 'accepted' : 'declined',
       nextAction: accept ? 'create_temporary_room' : 'back_to_matches',
       reason: accept ? '双方都已确认，Agent 可以创建临时房间了' : '对方暂时不方便，换一个人试试',
     },
@@ -680,6 +716,32 @@ export function peerConfirmState(state: AgentState, accept: boolean): AgentState
   }
 }
 
+export function cancelInviteState(state: AgentState, status: 'cancelled' | 'expired' = 'cancelled'): AgentState {
+  const pending = state.pendingConfirmation
+  if (pending.status !== 'awaiting_peer') return state
+  return {
+    ...state,
+    roomId: null,
+    pendingConfirmation: {
+      ...pending,
+      peerConfirmed: false,
+      status,
+      nextAction: status === 'expired' ? 'invite' : 'back_to_matches',
+      reason: status === 'expired' ? '邀请暂未得到回应，本次匹配已结束。' : '邀请已由发起人撤回',
+    },
+    updatedAt: Date.now(),
+  }
+}
+
+/** Demo 本机模式没有第二个用户，因此不会出现跨会话邀请；返回空列表，绝不伪造。 */
+export function listInvitationsState(_userId: string, _nickname: string): [] {
+  return []
+}
+
+/** 本机 Demo 模式无法凭 inviteId 跨会话确认；真实链路必须走后端，绝不用 mock 冒充成功。 */
+export function respondInvitationState(_inviteId: string, _accept: boolean): AgentState {
+  throw new Error('本机 Demo 模式没有第二个用户，无法确认跨会话邀请；请切换到真实模型模式')
+}
 export function createRoomState(state: AgentState): { state: AgentState; room: RoomState | null; trace: ToolTrace } {
   const pending = state.pendingConfirmation
   const trace: ToolTrace = {
@@ -739,7 +801,7 @@ export function createRoomState(state: AgentState): { state: AgentState; room: R
   }
 
   const sharedSongs = partnerItem?.sharedSongs ?? []
-  const roomId = `room-${state.sessionId.slice(-6)}-${String(Date.now()).slice(-5)}`
+  const roomId = `room-${state.sessionId.slice(0, 12)}`
   const room: RoomState = {
     roomId,
     concertId: state.eventId,
@@ -779,7 +841,7 @@ export function createRoomState(state: AgentState): { state: AgentState; room: R
       roomId,
       status: 'room_created',
       error: '',
-      pendingConfirmation: { ...pending, status: 'confirmed' },
+      pendingConfirmation: { ...pending, status: 'accepted' },
       updatedAt: Date.now(),
     },
     room,

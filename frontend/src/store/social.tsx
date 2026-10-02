@@ -36,6 +36,10 @@ export interface ChatMessage {
   pending?: boolean
   /** 发送失败，可重试 */
   failed?: boolean
+  /** 真人私聊的送达状态：sending（发送中）→ delivered（已送达） */
+  delivery?: 'sending' | 'delivered'
+  /** 由「触发模拟回复」产生的 Demo 消息：明确标记为模拟联系人，既不是真人也不是模型 */
+  simulated?: boolean
   /** 真实模型元信息（来源 / 模型名 / 耗时 / 请求 ID） */
   meta?: MessageMeta
 }
@@ -68,6 +72,10 @@ export interface Thread {
   time: string
   members?: number
   pinned?: boolean
+  /** 同行房间群聊：它属于哪个演出，消息列表据此直接进入房间 */
+  concertId?: string
+  /** 群聊的状态短标签，例如「2/3 已确认」 */
+  statusLabel?: string
 }
 
 export const THREAD_KIND_LABEL: Record<ThreadKind, string> = {
@@ -75,6 +83,15 @@ export const THREAD_KIND_LABEL: Record<ThreadKind, string> = {
   group: '群聊与临时房间',
   dm: '私聊',
   system: '系统通知',
+}
+
+/** Demo 演示用的"模拟联系人"回复：只在用户主动点击「触发模拟回复」时出现，并带明确标记。 */
+const SIMULATED_REPLIES: Record<string, string[]> = {
+  'dm-jiangli': [
+    '好呀，那就 18:50 在周边售卖台见，我先到的话就先排队。',
+    '收到！我穿深蓝色外套，到了在群里说一声。',
+  ],
+  'dm-ache': ['没问题，进场前帮你们拍一张合照，散场就不占用时间了。'],
 }
 
 const STATIC_THREADS: Thread[] = [
@@ -255,9 +272,29 @@ interface Persisted {
   read: Record<string, boolean>
   extra: Record<string, ChatMessage[]>
   accepted: Record<string, boolean>
+  /** 同行房间这个"群聊"对外暴露的状态：消息列表用它来渲染最后一条消息 / 未读数 / 集合状态 */
+  roomChat: Record<string, RoomChatStatus>
 }
 
-const EMPTY: Persisted = { read: {}, extra: {}, accepted: {} }
+const EMPTY: Persisted = { read: {}, extra: {}, accepted: {}, roomChat: {} }
+
+/**
+ * 同行房间（群聊）向消息模块广播的一份只读快照。
+ * 房间自己的聊天记录仍然存在 syncstage.chat.* 里，这里只是"消息列表要显示的那几个字段"，
+ * 不参与聊天逻辑，也不改变任何既有数据结构。
+ */
+export interface RoomChatStatus {
+  /** 最后一条消息的预览文本 */
+  preview: string
+  /** 最后一条消息的时间 */
+  time: string
+  /** 未读数：进入房间后归零 */
+  unread: number
+  /** 消息免打扰：开启后不计入底部红点 */
+  muted: boolean
+  /** 集合状态短标签，例如「集合中」「待确认」 */
+  meetingLabel: string
+}
 const KEY = 'sfl.social.v1'
 
 function read(): Persisted {
@@ -275,12 +312,14 @@ function groupThread(room: RoomState): Thread {
   return {
     id: `group-${room.roomId}`,
     kind: 'group',
-    title: `${room.concertTitle} · 临时房间`,
+    title: `${room.concertTitle}同行组`,
     subtitle: `${room.members.length} 位成员 · ${confirmed}/${room.members.length} 已确认`,
     avatar: null,
     unread: 1,
     time: '进行中',
     members: room.members.length,
+    concertId: room.concertId,
+    statusLabel: `${confirmed}/${room.members.length} 已确认`,
     pinned: true,
   }
 }
@@ -292,7 +331,13 @@ interface SocialValue {
   threadOf: (threadId: string) => Thread | undefined
   messagesOf: (threadId: string) => ChatMessage[]
   agentStateOf: (threadId: string) => AgentThreadState
+  /** 同行房间（群聊）对外广播的状态快照，没有房间时为 undefined */
+  roomChatOf: (threadId: string) => RoomChatStatus | undefined
+  /** 由同行房间页调用：把房间的最后一条消息 / 未读 / 集合状态同步到消息模块 */
+  publishRoomChat: (threadId: string, status: RoomChatStatus) => void
   send: (threadId: string, text: string) => Promise<void>
+  /** Demo 专用：让"模拟联系人"回一句话，消息会带 simulated 标记 */
+  simulatePeerReply: (threadId: string) => void
   retry: (threadId: string) => Promise<void>
   markRead: (threadId: string) => void
   acceptCard: (threadId: string, messageId: string) => void
@@ -300,7 +345,9 @@ interface SocialValue {
 
 const SocialContext = createContext<SocialValue | null>(null)
 
-const AGENT_KINDS = new Set<ThreadKind>(['agent', 'group'])
+// 只有 Agent 会话会触发自动回复。真人与真人（私聊、临时房间群聊）一律不接 AI，
+// 否则会出现「AI 冒充真人」。
+const AGENT_KINDS = new Set<ThreadKind>(['agent'])
 const IDLE_AGENT_STATE: AgentThreadState = { status: 'idle' }
 
 function nowTime(): string {
@@ -332,7 +379,9 @@ export function SocialProvider({
   }, [state])
 
   const threads = useMemo<Thread[]>(() => {
-    const dynamic = room ? [groupThread(room)] : []
+    // 后端在「还没有房间」时会给出空对象；按 Partial<RoomState> 契约这里只接受带 members 的房间，
+    // 否则 groupThread 读 room.members.filter 会整页崩溃（对方接受/拒绝后轮询回填时最容易触发）。
+    const dynamic = room && Array.isArray(room.members) ? [groupThread(room)] : []
     return [...dynamic, ...STATIC_THREADS]
   }, [room])
 
@@ -461,11 +510,41 @@ export function SocialProvider({
         time: nowTime(),
         mine: true,
         pending: true,
+        delivery: 'sending',
       })
-      if (!thread || !AGENT_KINDS.has(thread.kind)) return
-      await runAgentReply(thread, messageId, trimmed, history)
+      if (!thread) return
+      if (AGENT_KINDS.has(thread.kind)) {
+        await runAgentReply(thread, messageId, trimmed, history)
+        return
+      }
+      // 真人与真人（私聊 / 临时房间群聊）不会触发任何 AI 自动回复：
+      // 这里只推进「发送中 → 已送达」，回复与否完全由真人决定。
+      await new Promise((resolve) => setTimeout(resolve, 420))
+      patchMessage(threadId, messageId, { pending: false, delivery: 'delivered' })
     },
-    [appendMessage, historyFor, profile.nickname, runAgentReply, threads],
+    [appendMessage, historyFor, patchMessage, profile.nickname, runAgentReply, threads],
+  )
+
+  /** Demo 专用：模拟联系人回一句话。仅在用户主动点击时发生，并带 simulated 标记。 */
+  const simulateCursor = useRef<Record<string, number>>({})
+  const simulatePeerReply = useCallback(
+    (threadId: string) => {
+      const thread = threads.find((item) => item.id === threadId)
+      if (!thread || thread.kind !== 'dm') return
+      const pool = SIMULATED_REPLIES[threadId] ?? ['收到，我们就按公开集合点见。']
+      const index = simulateCursor.current[threadId] ?? 0
+      simulateCursor.current[threadId] = index + 1
+      appendMessage(threadId, {
+        id: `sim-${Date.now()}`,
+        threadId,
+        authorId: 'sim-peer',
+        authorName: thread.title,
+        text: pool[index % pool.length],
+        time: nowTime(),
+        simulated: true,
+      })
+    },
+    [appendMessage, threads],
   )
 
   const retry = useCallback(
@@ -485,17 +564,41 @@ export function SocialProvider({
     setState((prev) => (prev.read[threadId] ? prev : { ...prev, read: { ...prev.read, [threadId]: true } }))
   }, [])
 
+  /** 内容没变就原样返回，避免房间页每次渲染都触发消息模块重渲染（也避免任何自激循环）。 */
+  const publishRoomChat = useCallback((threadId: string, status: RoomChatStatus) => {
+    setState((prev) => {
+      const current = prev.roomChat[threadId]
+      if (
+        current &&
+        current.preview === status.preview &&
+        current.time === status.time &&
+        current.unread === status.unread &&
+        current.muted === status.muted &&
+        current.meetingLabel === status.meetingLabel
+      ) {
+        return prev
+      }
+      return { ...prev, roomChat: { ...prev.roomChat, [threadId]: status } }
+    })
+  }, [])
+
   const acceptCard = useCallback((threadId: string, messageId: string) => {
     void messageId
     setState((prev) => ({ ...prev, accepted: { ...prev.accepted, [threadId]: true } }))
   }, [])
 
   const value = useMemo<SocialValue>(() => {
-    const unreadOf = (thread: Thread) => (state.read[thread.id] ? 0 : thread.unread)
+    // 房间群聊的未读以房间页广播的快照为准（免打扰时不计入红点）
+    const unreadOf = (thread: Thread) => {
+      const roomChat = state.roomChat[thread.id]
+      if (roomChat) return roomChat.muted ? 0 : roomChat.unread
+      return state.read[thread.id] ? 0 : thread.unread
+    }
     const unreadCount = threads.reduce((total, thread) => total + unreadOf(thread), 0)
     const agentStateOf = (threadId: string) => agentStates[threadId] ?? IDLE_AGENT_STATE
-    return { threads, unreadCount, unreadOf, threadOf, messagesOf, agentStateOf, send, retry, markRead, acceptCard }
-  }, [threads, state.read, agentStates, threadOf, messagesOf, send, retry, markRead, acceptCard])
+    const roomChatOf = (threadId: string) => state.roomChat[threadId]
+    return { threads, unreadCount, unreadOf, threadOf, messagesOf, agentStateOf, roomChatOf, publishRoomChat, send, retry, markRead, acceptCard, simulatePeerReply }
+  }, [threads, state.read, state.roomChat, agentStates, threadOf, messagesOf, publishRoomChat, send, retry, markRead, acceptCard, simulatePeerReply])
 
   return <SocialContext.Provider value={value}>{children}</SocialContext.Provider>
 }

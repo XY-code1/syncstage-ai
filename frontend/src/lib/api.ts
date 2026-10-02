@@ -16,7 +16,7 @@ import type {
   RoomState,
   RoomTask,
 } from '../types'
-import { createRoomState, feedbackState, inviteState, peerConfirmState } from './agentMock'
+import { cancelInviteState, createRoomState, feedbackState, inviteState, listInvitationsState, peerConfirmState, respondInvitationState } from './agentMock'
 import { getAgentProvider, readAgentMode } from '../services/agent/agentProvider'
 import { AgentNotConfiguredError } from '../services/agent/agentTypes'
 import { probeLiveAvailability } from '../services/agent/liveAgentProvider'
@@ -169,6 +169,13 @@ export async function peerConfirmAgent(state: AgentState, accept: boolean, trans
   return peerConfirmState(state, accept)
 }
 
+export async function cancelInviteAgent(state: AgentState, expired: boolean, transport: AgentTransport): Promise<AgentState> {
+  if (transport === 'backend') {
+    return request<AgentState>(`/api/agent/sessions/${state.sessionId}/${expired ? 'expire-invite' : 'cancel-invite'}`, { method: 'POST' })
+  }
+  return cancelInviteState(state, expired ? 'expired' : 'cancelled')
+}
+
 export interface CreateRoomResult {
   state: AgentState
   room: RoomState | null
@@ -182,6 +189,68 @@ export async function createRoomAgent(state: AgentState, transport: AgentTranspo
   await delay(scenario === 'slow' ? 1600 : 520)
   const outcome = createRoomState(state)
   return { state: outcome.state, room: outcome.room }
+}
+
+/** 轮询单次会话：发起方等待对方确认时，用它把后端最新状态同步回本机。 */
+export async function fetchAgentSession(sessionId: string): Promise<AgentState> {
+  return request<AgentState>(`/api/agent/sessions/${sessionId}`, { timeoutMs: 8000 })
+}
+
+// ---------------------------------------------------------------------------
+// 同行邀请的双向确认（对方视角）：只有双方都确认后才由后端创建唯一房间；
+// 撤回 / 过期 / 已接受的邀请一律 409，且绝不建房。
+// ---------------------------------------------------------------------------
+
+export interface RoomInvitation {
+  inviteId: string
+  fromUserId: string
+  fromName: string
+  toUserId: string
+  toNickname: string
+  eventId: string
+  concertTitle: string
+  venue: string
+  meetingPoint: string
+  safety: string
+  sharedSongs: string[]
+  matchReason: string
+  score: number | null
+  createdAt: number | null
+  expiresAt: number | null
+  status: string
+}
+
+/** 对方视角：拉取正在等待我确认的邀请。Demo 身份可带 nickname 把替身映射到真实候选人。 */
+export async function fetchInvitations(
+  userId: string,
+  nickname: string,
+  transport: AgentTransport,
+): Promise<RoomInvitation[]> {
+  if (transport === 'backend') {
+    const query = new URLSearchParams({ userId })
+    if (nickname) query.set('nickname', nickname)
+    const data = await request<{ invitations: RoomInvitation[] }>(
+      '/api/agent/invitations?' + query.toString(),
+      { timeoutMs: 8000 },
+    )
+    return data.invitations ?? []
+  }
+  return listInvitationsState(userId, nickname)
+}
+
+/** 对方视角：接受 / 拒绝。只有接受时后端才会创建唯一房间，并返回带 roomId 的状态。 */
+export async function respondInvitation(
+  inviteId: string,
+  accept: boolean,
+  transport: AgentTransport,
+): Promise<AgentState> {
+  if (transport === 'backend') {
+    return request<AgentState>('/api/agent/invitations/' + encodeURIComponent(inviteId) + '/respond', {
+      method: 'POST',
+      body: { accept },
+    })
+  }
+  return respondInvitationState(inviteId, accept)
 }
 
 export async function feedbackAgent(state: AgentState, rating: string, tags: string[], comment: string, transport: AgentTransport): Promise<AgentState> {
@@ -325,10 +394,73 @@ export async function sendAgentChat(payload: AgentChatRequestInput): Promise<Age
           + ` status=${error instanceof ApiError ? error.status : null}`
           + ` message=${error instanceof Error ? error.message : String(error)}`
           + ` hint=${error instanceof ApiError ? error.hint : ''}`
+          + ` requestId=${error instanceof ApiError ? error.requestId : ''}`
           + ` detail=${error instanceof ApiError ? error.detail : ''}`,
       )
     }
     throw error
   }
+}
+
+// ---------------------------------------------------------------------------
+// 同行房间的真人消息（后端持久化；两个浏览器上下文凭同一 roomId 互发，2 秒轮询）
+// 这里不做任何 mock：后端失败就抛错，绝不伪造对方的回复。
+// ---------------------------------------------------------------------------
+
+export interface RoomChatMember {
+  userId: string
+  nickname: string
+  avatar?: { from: string; to: string }
+  isMe?: boolean
+  role?: string
+  note?: string
+  confirmed?: boolean
+}
+
+export interface RoomSnapshot {
+  roomId: string
+  concertId: string
+  concertTitle: string
+  meetingPoint?: { name: string; time: string; note: string }
+  members: RoomChatMember[]
+  icebreakers?: string[]
+  tasks?: RoomTask[]
+  createdAt?: string
+}
+
+export interface RoomMessage {
+  id: number
+  roomId: string
+  senderId: string
+  senderName: string
+  content: string
+  createdAt: string
+}
+
+/** 凭 roomId 读取房间：第二个浏览器上下文不依赖本地存储也能进入同一房间。 */
+export async function fetchRoom(roomId: string): Promise<RoomSnapshot> {
+  return request<RoomSnapshot>('/api/rooms/' + encodeURIComponent(roomId), { timeoutMs: 8000 })
+}
+
+/** after 传上一批最后一条的 id 时只取增量，用于 2 秒轮询。 */
+export async function fetchRoomMessages(roomId: string, after?: number): Promise<RoomMessage[]> {
+  const query = typeof after === 'number' && after > 0 ? '?after=' + after : ''
+  const data = await request<{ roomId: string; messages: RoomMessage[] }>(
+    '/api/rooms/' + encodeURIComponent(roomId) + '/messages' + query,
+    { timeoutMs: 8000 },
+  )
+  return data.messages ?? []
+}
+
+/** 真人发送一条消息；后端只入库并回显，不会触发模型或自动回复。 */
+export async function sendRoomMessage(
+  roomId: string,
+  payload: { senderId: string; senderName: string; content: string },
+): Promise<RoomMessage> {
+  return request<RoomMessage>('/api/rooms/' + encodeURIComponent(roomId) + '/messages', {
+    method: 'POST',
+    body: payload,
+    timeoutMs: 8000,
+  })
 }
 

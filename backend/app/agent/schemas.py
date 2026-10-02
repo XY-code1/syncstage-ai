@@ -30,6 +30,12 @@ class PeerConfirmRequest(BaseModel):
     accept: bool = True
 
 
+class InvitationRespondRequest(BaseModel):
+    """对方视角的确认入口：只凭 inviteId 接受或拒绝，不需要知道发起方会话。"""
+
+    accept: bool = True
+
+
 class FeedbackRequest(BaseModel):
     rating: str = 'ok'
     tags: list[str] = Field(default_factory=list)

@@ -1,0 +1,193 @@
+{
+  "ranAt": "2026-10-02T08:31:50.437Z",
+  "base": "http://127.0.0.1:5173",
+  "api": "http://127.0.0.1:8020",
+  "total": 25,
+  "passed": 25,
+  "failed": 0,
+  "rows": [
+    {
+      "step": "第0步 /api/ai/status provider=deepseek 且 configured=true",
+      "ok": true,
+      "note": "model=deepseek-flash"
+    },
+    {
+      "step": "第0步 真实 DeepSeek 匹配运行完成",
+      "ok": true,
+      "note": "runId=run-2e0849f5469b4a4e9f1286039e1bf36e"
+    },
+    {
+      "step": "第0步 匹配由真实模型完成（source=model, isMock=false）",
+      "ok": true,
+      "note": "provider=deepseek model=deepseek-flash"
+    },
+    {
+      "step": "第0步 冒烟组里存在第二位真人身份",
+      "ok": true,
+      "note": "写歌的江离"
+    },
+    {
+      "step": "第0步 双方确认后创建了同一个 roomId",
+      "ok": true,
+      "note": "roomId=room-run-2e08-29892"
+    },
+    {
+      "step": "第0步 后端可按 roomId 读回房间（第二身份不依赖本地存储）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第1步 A 端进入房间（390x844，独立浏览器实例）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第1步 B 端进入同一房间（另一个隔离实例 / 无痕 profile）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第1步 两个上下文本地都没有房间状态（只凭 roomId，证明不靠 localStorage）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第1步 B 端此时还没有 A 的消息（本地无任何缓存）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第2步 A 端输入真人消息",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第2步 A 端点击发送",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第2步 A 端本地看到自己发出的消息",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第2步 B 端在另一个隔离浏览器里收到 A 的消息（B→收到）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第3步 B 端输入回复",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第3步 B 端点击发送",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第3步 B 端本地看到自己的回复",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第3步 A 端收到 B 的回复（A→收到）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第4步 A 端刷新后两条消息都还在",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第4步 B 端刷新后两条消息都还在",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第5步 消息由后端保存，刷新/换实例都能读到",
+      "ok": true,
+      "note": "count=2"
+    },
+    {
+      "step": "第5步 每条消息字段完整（id/roomId/senderId/senderName/content/createdAt）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第5步 发送者就是 A/B 两个真人身份",
+      "ok": true,
+      "note": "u-viewer,u-08"
+    },
+    {
+      "step": "第5步 等待 4.5s 没有任何第三方/AI/mock 冒充真人回复",
+      "ok": true,
+      "note": "extra=0"
+    },
+    {
+      "step": "第5步 页面没有「模拟联系人」或 AI 冒充回复",
+      "ok": true,
+      "note": ""
+    }
+  ],
+  "calls": [
+    {
+      "label": "ai-status",
+      "path": "/api/ai/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 24
+    },
+    {
+      "label": "agent-run",
+      "path": "/api/agent/run",
+      "method": "POST",
+      "status": 200,
+      "ms": 11738
+    },
+    {
+      "label": "invite",
+      "path": "/api/agent/sessions/run-2e0849f5469b4a4e9f1286039e1bf36e/invite",
+      "method": "POST",
+      "status": 200,
+      "ms": 3
+    },
+    {
+      "label": "peer-confirm",
+      "path": "/api/agent/sessions/run-2e0849f5469b4a4e9f1286039e1bf36e/peer-confirm",
+      "method": "POST",
+      "status": 200,
+      "ms": 8
+    },
+    {
+      "label": "create-room",
+      "path": "/api/agent/sessions/run-2e0849f5469b4a4e9f1286039e1bf36e/room",
+      "method": "POST",
+      "status": 200,
+      "ms": 25
+    },
+    {
+      "label": "room-read",
+      "path": "/api/rooms/room-run-2e08-29892",
+      "method": "GET",
+      "status": 200,
+      "ms": 7
+    },
+    {
+      "label": "room-messages",
+      "path": "/api/rooms/room-run-2e08-29892/messages",
+      "method": "GET",
+      "status": 200,
+      "ms": 4
+    },
+    {
+      "label": "room-messages-after",
+      "path": "/api/rooms/room-run-2e08-29892/messages?after=2",
+      "method": "GET",
+      "status": 200,
+      "ms": 4
+    }
+  ]
+}

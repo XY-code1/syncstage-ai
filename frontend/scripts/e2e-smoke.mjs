@@ -22,8 +22,10 @@ const profile = mkdtempSync(join(tmpdir(), 'sfl-e2e-'))
 const screenshotDir = join(process.cwd(), '..', 'docs', 'screenshots')
 mkdirSync(screenshotDir, { recursive: true })
 let failures = 0
+const SHEET_CLOSE_SELECTOR = "[aria-label='关闭弹窗']"
 let chrome
 let socket
+// 运行模式由执行页徽标判定：mock = Demo 模拟 Agent，live = 真实模型 Agent。
 
 function check(condition, label) {
   if (condition) {
@@ -32,6 +34,10 @@ function check(condition, label) {
     failures += 1
     console.log('  FAIL  ' + label)
   }
+}
+
+function skip(label, why) {
+  console.log('  SKIP  ' + label + (why ? '（' + why + '）' : ''))
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -115,10 +121,13 @@ try {
   }
 
   async function capture(name) {
+    // 清掉上一步残留的 toast，避免遮挡截图
+    await evaluate(`document.querySelectorAll('div.fixed.inset-x-0.bottom-24 button').forEach((el) => el.click())`)
+    await sleep(120)
     await evaluate('window.scrollTo(0, 0)')
     await sleep(250)
     const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
-    writeFileSync(join(screenshotDir, name), Buffer.from(shot.data, 'base64'))
+    writeFileSync(join(screenshotDir, 'p0-' + name), Buffer.from(shot.data, 'base64'))
   }
 
   async function waitForText(text, timeoutMs = 15000) {
@@ -151,6 +160,36 @@ try {
     })()`)
   }
 
+  /**
+   * 需要同时命中多个子串才点击：避免「群聊行的预览文案里出现某个名字」时
+   * 把 substring 匹配误当成私聊行（例如预览为「写歌的江离：…」的同行组行）。
+   */
+  async function clickTextAll(texts, index = 0) {
+    return evaluate(`(() => {
+      const wanted = ${JSON.stringify(texts)};
+      const nodes = Array.from(document.querySelectorAll('button, a, [role=button]'));
+      const matches = nodes.filter((el) => {
+        const label = ((el.innerText || '') + ' ' + (el.getAttribute('aria-label') || '')).replace(/\\s+/g, ' ').trim();
+        return wanted.every((item) => label.includes(item));
+      });
+      const el = matches[${index}];
+      if (!el) return { ok: false, matches: matches.length };
+      el.scrollIntoView({ block: 'center' });
+      el.click();
+      return { ok: true, matches: matches.length, text: (el.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 40) };
+    })()`)
+  }
+
+  /** 轮询等待表达式结果等于期望值：消息要先落库再显示，同步断言会踩在请求返回之前 */
+  async function waitForValue(expression, expected, timeoutMs = 6000) {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      if ((await evaluate(expression)) === expected) return true
+      await sleep(150)
+    }
+    return false
+  }
+
   async function fillTextarea(value) {
     return evaluate(`(() => {
       const el = document.querySelector('textarea');
@@ -167,12 +206,42 @@ try {
   /** 一级/核心页面不应超过给定屏幕数的连续纵向堆叠 */
   const fitsScreens = (screens) => evaluate(`document.documentElement.scrollHeight <= innerHeight * ${screens} + 4`)
   const hasElement = (selector) => evaluate(`Boolean(document.querySelector(${JSON.stringify(selector)}))`)
+
+  /** 等待元素出现：路由切换是异步的，直接断言容易踩在上一页 */
+  const waitForElement = async (selector, timeoutMs = 8000) => {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      if (await hasElement(selector)) return true
+      await sleep(120)
+    }
+    return false
+  }
+  /** 底部「消息」入口的未读数字：没有红点时返回空串 */
+  const navUnread = () => evaluate(`(() => {
+    const nav = document.querySelector('nav[aria-label="主导航"]');
+    const link = nav ? [...nav.querySelectorAll('a')].find((a) => (a.getAttribute('href') || '').endsWith('/messages')) : null;
+    if (!link) return '';
+    const badge = [...link.querySelectorAll('span')].map((s) => (s.innerText || '').trim()).find((t) => t.length > 0 && t.length <= 2 && !Number.isNaN(Number(t)));
+    return badge || '';
+  })()`)
   const tapTargetsOk = (minWidth = 120, minHeight = 44) => evaluate(`(() => {
     const nodes = [...document.querySelectorAll('main button, nav button, footer button')];
     return nodes.filter((el) => { const r = el.getBoundingClientRect(); return r.width >= ${minWidth} && r.height > 0 && r.bottom > 0 && r.top < innerHeight; })
       .every((el) => el.getBoundingClientRect().height >= ${minHeight});
   })()`)
   const noHorizontalOverflow = () => evaluate('document.documentElement.scrollWidth <= innerWidth')
+  /** 双轨声波当前状态：apart（尚未汇合）/ converging（正在靠近）/ merged（已汇合） */
+  const dualTrackState = () => evaluate(
+    '(() => { const el = document.querySelector(\'[data-visual="dual-track"]\'); return el ? el.getAttribute("data-track-state") : "" })()',
+  )
+  const waitForDualTrackState = async (state, timeoutMs = 5000) => {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      if ((await dualTrackState()) === state) return true
+      await sleep(120)
+    }
+    return false
+  }
   const mobileButtonVisible = (label) => evaluate(`(() => {
     const el = [...document.querySelectorAll('button')].find((item) => (item.innerText || '').trim().includes(${JSON.stringify(label)}));
     if (!el) return false;
@@ -186,9 +255,15 @@ try {
 
   // ---------------------------------------------------------------- 演示控制台
   async function openConsole() {
-    const clicked = await clickText('打开演示控制台')
-    await sleep(300)
-    return clicked
+    // 页面刚导航完时，点击可能落在旧文档上；这里以「弹层真的出现」为准重试
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      if (!(await hasElement(SHEET_CLOSE_SELECTOR))) {
+        await clickText('打开演示控制台')
+      }
+      await sleep(250)
+      if (await hasElement(SHEET_CLOSE_SELECTOR)) return { ok: true }
+    }
+    return { ok: false }
   }
 
   async function closeConsole() {
@@ -199,7 +274,11 @@ try {
   async function resetDemo() {
     await openConsole()
     const clicked = await clickText('重置演示数据并回到首页')
-    return clicked.ok === true
+    if (clicked.ok !== true) return false
+    // 重置会清空本地会话并回到首页；等首页渲染完成再继续，避免后续断言踩在旧状态上
+    await waitForText('近期演出', 8000)
+    await sleep(200)
+    return true
   }
 
   async function setJudge(on) {
@@ -246,7 +325,7 @@ try {
   await evaluate('sessionStorage.clear(); localStorage.clear()')
   await goto('/')
   check(await waitForText('一起去现场'), '① 首页标题可见')
-  check(await waitForText('正在匹配的演出'), '① 首页直接给出演出入口')
+  check(await waitForText('近期演出'), '① 首页保留真实演出入口')
   check(await waitForText('夜航计划'), '① 首页至少显示一场演出')
   const navLabels = ['首页', '同频', '消息', '我的']
   const navText = await evaluate(`(() => { const nav = document.querySelector('nav[aria-label=主导航]'); return nav ? nav.innerText : '' })()`)
@@ -260,18 +339,40 @@ try {
     check(await noHorizontalOverflow(), `① ${width}×${height} 无横向溢出`)
   }
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true })
-  check(await fitsScreens(1.5), '① 首页不超过 1.5 屏纵向堆叠')
+  await sleep(250)
+  check(await waitForText('开场前，'), '① 首屏主标题为开场前找同频的人')
+  check(await waitForText('两条轨道尚未汇合'), '① 首屏是两条尚未汇合的声波')
+  check(await waitForElement('[data-visual=dual-track]'), '① 首屏使用双轨声波主视觉')
+  check((await dualTrackState()) === 'apart', '① 首屏双轨状态是「尚未汇合」')
   check(await tapTargetsOk(), '① 首页主点击区高度合格')
-  check(await mobileButtonVisible('找同频搭子'), '① 首页主入口按钮无遮挡')
+  check(await mobileButtonVisible('开始找同频搭子'), '① 首页主按钮无遮挡')
+  await send('Emulation.setDeviceMetricsOverride', { width: 430, height: 932, deviceScaleFactor: 1, mobile: true })
+  await sleep(300)
+  check(await evaluate('document.querySelector("h1")?.getBoundingClientRect().bottom < innerHeight'), '① 430×932 Hero 主标题位于首屏')
+  check(await noHorizontalOverflow(), '① 430×932 首页无横向溢出')
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true })
+  await sleep(250)
   await capture('00-home.png')
+  // prefers-reduced-motion：关闭轨迹移动，但静态状态变化（尚未汇合）必须保留
+  await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] })
+  await sleep(400)
+  check(
+    await evaluate(`(() => {
+      const track = document.querySelector('.track-shift');
+      if (!track) return false;
+      return getComputedStyle(track).transitionDuration.split(',').every((value) => parseFloat(value) === 0);
+    })()`),
+    '① prefers-reduced-motion 下关闭轨迹移动',
+  )
+  check((await dualTrackState()) === 'apart', '① 减少动效下仍保留静态双轨状态')
+  await send('Emulation.setEmulatedMedia', { features: [] })
+  await sleep(250)
   await clickText('夜航计划')
   check(await waitForText('AI找同行'), '① 点击演出进入独立详情路由')
   check((await currentHash()).includes('/concert/night-flight'), '① 演出详情路由正确')
   check(await mobileButtonVisible('AI找同行'), '① 移动端主入口按钮无遮挡')
-  check(
-    await waitForText('本作品为参赛概念Demo'),
-    '① 明确说明未接入官方 API、当前使用脱敏 Demo 数据',
-  )
+  check(await waitForText('概念功能 Demo'), '① 全站只在顶部保留一个概念 Demo 标签')
+  check(!(await bodyText()).includes('本作品为参赛概念Demo'), '① 详情页不再重复 Demo 声明')
   await capture('01-concert-detail.png')
 
   step('② 音乐数据授权：单屏紧凑列表 + 逐项说明')
@@ -312,49 +413,164 @@ try {
   await clickText('让 Agent 理解任务')
 
   step('④ 确认 Agent 的理解')
-  check(await waitForText('确认需求，执行 Agent 任务', 20000), '④ 同页展示结构化意图确认')
-  check(await mobileButtonVisible('确认需求，执行 Agent 任务'), '④ 移动端执行按钮无遮挡')
+  check(await waitForText('就按这个找', 20000), '④ 同页展示结构化意图确认')
+  check(await mobileButtonVisible('就按这个找'), '④ 移动端执行按钮无遮挡')
+  check(await fitsScreens(1.05), '④ 四项摘要确认控制在一个主屏内')
+  check(await noHorizontalOverflow(), '④ 需求确认页无横向溢出')
   const intentText = await bodyText()
-  check(intentText.includes('组队人数') || intentText.includes('人数'), '④ 确认页展示解析出的组队人数')
+  check(intentText.includes('人同行') || intentText.includes('组队人数'), '④ 确认页展示解析出的组队人数')
   check(intentText.includes('安全'), '④ 确认页展示解析出的安全偏好')
+  check(
+    intentText.includes('音乐暗号') && intentText.includes('同行方式') && intentText.includes('现场氛围') && intentText.includes('安全边界'),
+    '④ 需求确认页压成一屏四张摘要卡',
+  )
+  check(intentText.includes('有一处不对'), '④ 提供「有一处不对」的修改入口')
+  check(intentText.includes('查看 Agent 工作过程'), '④ 技术信息收进可折叠的工作过程')
   await capture('03-agent-intent.png')
 
-  step('⑤ Agent 执行页：四阶段进度 → 自动进入匹配结果')
-  await clickText('确认需求，执行 Agent 任务')
-  check(await waitForText('理解需求', 20000), '⑤ 执行页展示「理解需求」阶段')
-  check(await waitForText('寻找同场用户'), '⑤ 执行页展示「寻找同场用户」阶段')
-  check(await waitForText('计算同频度'), '⑤ 执行页展示「计算同频度」阶段')
-  check(await waitForText('生成组队方案'), '⑤ 执行页展示「生成组队方案」阶段')
-  check(await waitForText('Demo 模拟 Agent'), '⑤ 明确标注当前是 Demo 模拟 Agent')
-  check(!(await bodyText()).includes('parse_social_intent'), '⑤ 一级进度页不再直接铺工具调用日志')
+  step('⑤ 双轨匹配：靠近 → 汇合 → 同行票根')
+  await clickText('就按这个找')
+  check(await waitForElement('[data-visual="dual-track"]'), '⑤ 匹配页用双轨声波表达两条轨道正在靠近')
+  check((await dualTrackState()) === 'converging', '⑤ 匹配中的双轨状态是「正在靠近」')
+  check(
+    await evaluate('document.querySelectorAll(\'[aria-label="匹配阶段"] [data-stage]\').length === 4'),
+    '⑤ 四个真实阶段挂在进度上',
+  )
+  const stageNames = await evaluate(
+    '[...document.querySelectorAll(\'[aria-label="匹配阶段"] [data-stage]\')].map((el) => el.getAttribute("data-stage"))',
+  )
+  check(
+    ['理解你的期待', '检查安全边界', '对齐音乐偏好', '寻找同频观众'].every((name) => stageNames.includes(name)),
+    '⑤ 阶段名与后端真实流水线一致',
+  )
+  check(
+    await evaluate('document.querySelectorAll(\'[data-visual="track-bead"]\').length === 5'),
+    '⑤ 两轨之间挂着五个共同音符节点',
+  )
+  const trackProgress = () => evaluate(
+    '(() => { const el = document.querySelector(\'[data-visual="dual-track"]\'); return el ? Number(el.getAttribute("data-track-progress")) : -1 })()',
+  )
+  const progressStart = await trackProgress()
+  check(progressStart >= 0, '⑤ 双轨声波带真实进度')
+  check(!(await bodyText()).includes('parse_social_intent'), '⑤ 一级匹配页不铺工具调用日志')
+  check(!/provider|token|fallback|\d+ ms/.test(await bodyText()), '⑤ 一级匹配页不出现技术参数')
+  check(await fitsScreens(1.05), '⑤ 匹配中控制在一个主屏内')
   await capture('04a-agent-running.png')
-  check(await waitForText('综合匹配度', 60000), '⑤ Mock 跑完自动跳转匹配结果页')
-  check((await currentHash()).includes('/matches'), '⑤ 完成后落在 /concert/:id/matches')
-  const resultText = await bodyText()
-  check(/位同场候选人/.test(resultText) || resultText.includes('综合匹配度'), '⑤ 结果页展示候选人列表')
-  await goto('/concert/night-flight/running')
-  check(await waitForText('查看匹配结果', 20000), '⑤ 返回进度页仍能看到结果摘要与入口')
-  const summaryText = await bodyText()
-  check(summaryText.includes('匹配理由：'), '⑤ 摘要包含 Top Match 的匹配理由')
-  check(summaryText.includes('共同演出：'), '⑤ 摘要包含共同演出')
-  check(/位同频候选人/.test(summaryText), '⑤ 摘要包含候选人数')
-  check(await fitsScreens(1.5), '⑤ 执行页不超过 1.5 屏纵向堆叠')
-  await capture('04b-agent-result.png')
-  await clickText('查看 Agent 工作过程')
-  check((await currentHash()).includes('/trace'), '⑤ 工具调用记录移动到二级页面')
-  check(await waitForText('工具调用步骤', 10000), '⑤ 二级页面保留全部工具调用记录')
-  const traceText = await bodyText()
-  check(traceText.includes('parse_social_intent'), '⑤ 二级页面可以看到真实工具名')
-  check(traceText.includes('阶段：'), '⑤ 二级页面标注每个工具所属阶段')
-  check(traceText.includes('输入：') && traceText.includes('输出：'), '⑤ 二级页面保留输入输出摘要')
-  check(traceText.includes('ms'), '⑤ 二级页面保留每步耗时')
-  await capture('04c-agent-trace.png')
-  await goto('/concert/night-flight/running')
-  check(await waitForText('查看匹配结果', 20000), '⑤ 返回进度页仍能看到结果入口')
-  await clickText('查看匹配结果')
-  await sleep(400)
-  check((await currentHash()).includes('/matches'), '⑤ 从进度页进入匹配列表')
 
+  // 每完成一步，两轨之间就亮起一个共同音符；两条轨道随真实阶段持续靠近
+  const advancing = await (async () => {
+    const deadline = Date.now() + 15000
+    let moved = progressStart
+    while (Date.now() < deadline) {
+      moved = Math.max(moved, await trackProgress())
+      const lit = await evaluate('Boolean(document.querySelector(\'[data-visual="track-bead"][data-bead-state="done"]\'))')
+      if (moved > progressStart + 0.1 && lit) return true
+      if ((await currentHash()).includes('/reveal')) return true
+      await sleep(200)
+    }
+    return false
+  })()
+  check(advancing, '⑤ 两道声波随真实阶段靠近，并逐一亮起共同音符')
+
+  // 跑完先播 600–900ms 汇合动画，再进入同频汇合页
+  check(await waitForText('发现同频同行者', 90000), '⑤ 匹配完成后进入同频汇合页')
+  check((await currentHash()).includes('/reveal'), '⑤ 完成后落在 /concert/:id/reveal')
+  check(await waitForElement('[data-visual="dual-track"]'), '⑤ 两条声波在共同歌曲封面处汇合')
+  await sleep(120)
+  check(await fitsScreens(1.05), '⑤ 汇合成功控制在一个主屏内')
+  check(await noHorizontalOverflow(), '⑤ 汇合页无横向溢出')
+  const revealText = await bodyText()
+  check(
+    revealText.includes('共同曲目') &&
+      revealText.includes('夜航的信') &&
+      revealText.includes('你们同频的 3 个理由') &&
+      revealText.includes('只在公开场合见面'),
+    '⑤ 票根首屏展示曲目、活动、集合信息和三个理由',
+  )
+  check(/\d+%/.test(revealText), '⑤ 展示真实综合匹配度')
+  // 等 600–900ms 汇合动画停稳再截图：验收图必须能看到两条声波已经汇合
+  await sleep(950)
+  check(await waitForDualTrackState('merged', 2000), '⑤ 汇合动画结束后双轨进入「已汇合」状态')
+  await capture('05a-match-reveal.png')
+
+  // 动画结束后浮出「查看匹配依据」入口，票根 / 偏好明细 / Agent 证据都收在这个 bottom sheet 里
+  check(await waitForText('查看匹配依据', 10000), '⑤ 汇合动画结束后浮出匹配依据入口')
+  await clickText('查看匹配依据')
+  check(await waitForText('推荐理由'), '⑤ 匹配依据可展开')
+  check(await waitForText('偏好明细'), '⑤ 匹配依据里包含偏好明细')
+  const ticketText = await bodyText()
+  check(ticketText.includes('夜航计划'), '⑤ 票根包含演出名称与时间')
+  check(ticketText.includes('同行方式') && ticketText.includes('集合原则'), '⑤ 票根包含同行方式与公开集合原则')
+  check(ticketText.includes('双方都还没确认'), '⑤ 票根展示双方确认状态')
+
+  const ticketGeom = await evaluate(`(() => {
+    const panel = document.querySelector('[role=dialog] > div');
+    if (!panel) return null;
+    const rect = panel.getBoundingClientRect();
+    const scroller = panel.querySelector('.overflow-y-auto');
+    return {
+      top: Math.round(rect.top),
+      height: Math.round(rect.height),
+      viewport: innerHeight,
+      innerScroll: scroller ? getComputedStyle(scroller).overflowY : 'none',
+      pageScroll: document.documentElement.scrollHeight,
+    };
+  })()`)
+  const ticketFits = Boolean(ticketGeom)
+    && ticketGeom.top >= -1
+    && ticketGeom.height <= ticketGeom.viewport + 1
+    && ticketGeom.pageScroll <= ticketGeom.viewport * 1.05
+  if (!ticketFits) console.log('    DEBUG ticket=' + JSON.stringify(ticketGeom))
+  check(ticketFits, '⑤ 同行票根在一个主屏内（超出部分内部滚动）')
+  await capture('05b-ticket-stub.png')
+  await clickText('关闭弹窗')
+
+  // 「换一位」真的切换候选人
+  const person1 = await evaluate('document.querySelector(\'[data-visual="reveal-person"]\').getAttribute("data-person")')
+  check(Boolean(person1), '⑤ 汇合页展示真实候选人')
+  await clickText('换一位')
+  await sleep(500)
+  const person2 = await evaluate('document.querySelector(\'[data-visual="reveal-person"]\').getAttribute("data-person")')
+  check(Boolean(person2) && person2 !== person1, '⑤ 「换一位」真的换到下一位候选人')
+  await capture('05c-reveal-swap.png')
+
+  // 「暂不同行」只记录理由，不通知对方
+  await clickText('暂不同行')
+  check(await waitForText('理由只用于优化下一轮匹配'), '⑤ 「暂不同行」明确只影响下一轮匹配')
+  await capture('05d-reveal-reject.png')
+  await clickText('音乐不搭')
+  await clickText('记录并看下一位')
+  await sleep(600)
+  const person3 = await evaluate('document.querySelector(\'[data-visual="reveal-person"]\').getAttribute("data-person")')
+  check(Boolean(person3) && person3 !== person2, '⑤ 记录拒绝理由后自动看下一位')
+  check(!(await bodyText()).includes('淘汰'), '⑤ 拒绝后不出现淘汰文案')
+
+  // 发出邀请 → 双方确认后才允许进房间
+  await clickText('发出同行邀请')
+  check(await waitForText('等待对方确认', 10000), '⑤ 发出邀请后先等待对方确认，不创建房间')
+  check(!(await bodyText()).includes('进入同行房间'), '⑤ 单方确认时绝不提前开放房间')
+
+  // 路由约束：waiting / 未 accepted 状态访问房间路由必须被拦截回同频
+  await goto('/concert/night-flight/room')
+  await sleep(900)
+  check((await currentHash()).includes('/sync'), '⑤ waiting 状态访问房间路由被拦截回同频')
+  check(!(await bodyText()).includes('同行房间消息'), '⑤ 被拦截时看不到房间消息区')
+  await goto('/room/room-not-accepted-yet')
+  await sleep(900)
+  check((await currentHash()).includes('/sync'), '⑤ 未 accepted 时直接输入房间 URL 被拦截回同频')
+
+  await goto('/concert/night-flight/reveal?as=peer')
+  check(await waitForText('Demo访客邀请你一起去现场'), '⑤ 受邀方可看到邀请')
+  await clickText('接受同行')
+  check(await waitForText('进入同行房间', 15000), '⑤ 双方都确认后才出现进入同行房间入口')
+  await clickText('查看匹配依据')
+  check(await waitForText('双方已确认'), '⑤ 票根记录双方都已确认')
+  await clickText('关闭弹窗')
+
+  // 旧的匹配列表页仍然可用
+  await goto('/concert/night-flight/matches')
+  await sleep(400)
+  check(await waitForText('综合匹配度', 20000), '⑤ 匹配列表页仍然可用')
   step('⑥ 候选列表 -> 独立详情 -> 独立预沟通')
   check(await waitForText('综合匹配度'), '⑥ 列表显示候选摘要')
   await capture('05-match-list.png')
@@ -368,28 +584,86 @@ try {
   check(await waitForText('待真人确认'), '⑦ 报告展示待确认项')
   await capture('07-handshake.png')
   await clickText('确认报告并邀请同行')
-  await waitForText('模拟对方确认', 10000)
-  await clickText('模拟对方确认')
-  check(await waitForText('创建临时群聊', 10000), '⑧ 双方确认后允许创建群聊')
-  await clickText('创建临时群聊')
-  check(await waitForText('双向确认状态', 20000), '⑨ 房间展示双向确认状态')
-  check(await waitForText('公开集合点'), '⑨ 房间展示公开集合点')
-  check(await waitForText('真人临时群聊'), '⑨ 全部确认后开放真人临时群聊')
+  await waitForText('接受同行', 10000)
+  await clickText('接受同行')
+  check(await waitForText('进入临时群聊', 10000), '⑧ 双方确认后允许进入群聊')
+  await clickText('进入临时群聊')
+  check(await waitForText('夜航计划同行组', 20000), '⑨ 同行房间是消息模块里的一个群聊')
+  check(/\d+人\s*·\s*集合中/.test(await bodyText()), '⑨ 顶部栏显示「人数·集合状态」')
+  check(await hasElement('[aria-label="返回消息列表"]'), '⑨ 顶部左侧是「‹ 消息」返回')
+  check(await hasElement('[aria-label="房间设置"]'), '⑨ 顶部右侧是 ··· 房间设置')
+  check(await hasElement('[aria-label="查看集合详情"]'), '⑨ 集合信息压缩成一行可点击状态卡')
+  check(/\d+人同行\s*·\s*\d+\/\d+\s*已确认/.test(await bodyText()), '⑨ 双向确认压缩成一行状态')
+  check(!(await bodyText()).includes('双向确认状态'), '⑨ 删除顶部四段流程条与大面积确认卡')
+  check(await fitsScreens(1), '⑨ 房间为一屏式布局，整页不产生长滚动')
+  check(
+    await evaluate(`(() => { const el = document.querySelector('[aria-label="同行房间消息"]'); return Boolean(el) && getComputedStyle(el).overflowY === 'auto' })()`),
+    '⑨ 只有消息区是滚动容器',
+  )
   check(await waitForText('木那啦啦'), '⑨ 展示预置真人聊天')
-  check(await waitForText('同行Agent已完成安全条件核对'), '⑨ 展示系统安全提示')
-  check(await waitForText('候场任务'), '⑨ 房间展示候场任务')
-  check(await waitForText('AI破冰'), '⑨ 输入栏提供 AI 破冰辅助')
-  check(await evaluate(`(() => { const el=document.querySelector('input[placeholder="输入消息……"]'); if(!el) return false; el.scrollIntoView({block:'center'}); const r=el.getBoundingClientRect(); return r.width>80 && r.height>=32 && r.left>=0 && r.right<=innerWidth && r.top>=0 && r.bottom<=innerHeight; })()`), '⑨ 390×844 输入栏无遮挡')
-  check(await waitForText('24 小时后自动归档'), '⑨ 房间展示自动归档提示')
-  check(await waitForText('退出房间'), '⑨ 房间提供退出入口')
-  const beforeIce = await evaluate("document.querySelector('[aria-label=\"临时群聊消息\"]')?.children.length || 0")
-  await clickText('AI破冰')
-  check(await evaluate("document.querySelector('input[placeholder=\"输入消息……\"]')?.value.length > 0"), '⑨ AI 破冰只填入输入框')
-  check((await evaluate("document.querySelector('[aria-label=\"临时群聊消息\"]')?.children.length || 0")) === beforeIce, '⑨ AI 破冰不会自动发送')
+  check(await waitForText('同行Agent已完成安全条件核对'), '⑨ 安全提示是小型居中系统消息')
+  check(await waitForText('Agent · 集合点已同步'), '⑨ Agent 集合通知是小型系统消息')
+  check(await evaluate(`(() => { const el=document.querySelector('input[placeholder="输入消息……"]'); if(!el) return false; el.scrollIntoView({block:'center'}); const r=el.getBoundingClientRect(); return r.width>80 && r.height>=32 && r.left>=0 && r.right<=innerWidth && r.top>=0 && r.bottom<=innerHeight })()`), '⑨ 390×844 输入栏无遮挡')
+
+  // 集合详情：地图 / 到达状态 / 成员确认 / 安全说明
+  await clickText('查看集合详情')
+  check(await waitForText('集合详情', 10000), '⑨ 点击集合卡进入集合详情')
+  check(await waitForText('声浪 Livehouse 静安店'), '⑨ 集合详情展示地图与公开集合点')
+  check(await waitForText('我的到达状态'), '⑨ 集合详情可修改自己的到达状态')
+  check(await waitForText('安全说明'), '⑨ 集合详情包含安全说明')
+  await capture('08b-meeting-detail.png')
+  await clickText('我已记下集合点')
+  await sleep(300)
+  check(await waitForText('我已记下集合点'), '⑨ 集合确认后状态保持')
+  await clickText('关闭弹窗')
+
+  // 房间设置：成员列表 / 消息免打扰 / 举报 / 退出同行
+  await clickText('房间设置')
+  check(await waitForText('成员列表', 10000), '⑨ 房间设置包含成员列表')
+  check(await waitForText('消息免打扰'), '⑨ 房间设置包含消息免打扰')
+  check(await waitForText('退出同行'), '⑨ 房间设置包含退出同行（危险操作 + 二次确认）')
+  check(await waitForText('安全说明'), '⑨ 房间设置也包含安全说明')
+  await capture('08c-room-settings.png')
+  await clickText('消息免打扰')
+  check(await evaluate(`Boolean(document.querySelector('[aria-pressed="true"]'))`), '⑨ 消息免打扰可切换')
+  await clickText('消息免打扰')
+  await clickText('关闭弹窗')
+
+  // 430×932 也要首屏完整放下顶部栏 / 集合卡 / 聊天 / 输入栏
+  await send('Emulation.setDeviceMetricsOverride', { width: 430, height: 932, deviceScaleFactor: 1, mobile: true })
+  await sleep(400)
+  check(await fitsScreens(1), '⑨ 430×932 下房间仍是一屏')
+  check(
+    await evaluate(`(() => { const el=document.querySelector('input[placeholder="输入消息……"]'); if(!el) return false; el.scrollIntoView({block:'center'}); const r=el.getBoundingClientRect(); return r.width>120 && r.height>=32 && r.top>=0 && r.bottom<=innerHeight+1 })()`),
+    '⑨ 430×932 下输入栏完整可见',
+  )
+  await send('Emulation.clearDeviceMetricsOverride')
+  await sleep(300)
+  // 「＋」菜单与 Agent帮写：只出草稿，绝不自动发送
+  const beforeDraft = await evaluate(`document.querySelector('[aria-label="同行房间消息"]')?.children.length || 0`)
+  await clickText('更多操作')
+  check(await waitForText('Agent帮写', 10000), '⑨ 「＋」包含 Agent帮写 / 查看任务 / 共享歌曲 / 查看集合点')
+  check(await waitForText('查看任务'), '⑨ 「＋」包含查看任务')
+  check(await waitForText('共享歌曲'), '⑨ 「＋」包含共享歌曲')
+  await clickText('Agent帮写')
+  check(await waitForText('只生成草稿', 10000), '⑨ Agent帮写明确只生成草稿')
+  await clickText('生成草稿')
+  await clickText('填入输入框')
+  check(await evaluate(`document.querySelector('input[placeholder="输入消息……"]')?.value.length > 0`), '⑨ 草稿只填入输入框')
+  check((await evaluate(`document.querySelector('[aria-label="同行房间消息"]')?.children.length || 0`)) === beforeDraft, '⑨ Agent帮写不会自动发送')
+  const roomDraft = await evaluate(`document.querySelector('input[placeholder="输入消息……"]')?.value || ''`)
   await clickText('发送')
-  check((await evaluate("document.querySelector('[aria-label=\"临时群聊消息\"]')?.children.length || 0")) === beforeIce + 1, '⑨ 全部确认后本地发送会改变消息状态')
+  check(await waitForValue(`document.querySelector('[aria-label="同行房间消息"]')?.children.length || 0`, beforeDraft + 1), '⑨ 用户点发送后才真正发出')
+
+  // 举报 / 屏蔽不常驻，长按（右键）才出现
+  check(!(await bodyText()).includes('屏蔽成员'), '⑨ 举报与屏蔽不常驻显示')
+  check(
+    await evaluate(`(() => { const el = document.querySelector('[data-message-action="1"]'); if (!el) return false; el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })); return true })()`),
+    '⑨ 长按 / 右键消息才出现操作菜单',
+  )
+  check(await waitForText('消息操作', 10000), '⑨ 消息操作菜单包含举报与屏蔽')
   await clickText('屏蔽成员')
-  check(!(await evaluate("document.querySelector('[aria-label=\"临时群聊消息\"]')?.innerText.includes('我大概18:40到')")), '⑨ 屏蔽后不再显示对应成员消息')
+  check(!(await evaluate(`document.querySelector('[aria-label="同行房间消息"]')?.innerText.includes('我大概18:40到')`)), '⑨ 屏蔽后不再显示对应成员消息')
   await capture('08-temporary-room.png')
 
   await evaluate(`(() => { const key='sfl.session.v2'; const s=JSON.parse(sessionStorage.getItem(key)); s.room.members[1].confirmed=false; sessionStorage.setItem(key, JSON.stringify(s)); return true })()`)
@@ -432,7 +706,26 @@ try {
   check(await waitForText('一起去现场 Agent'), '⑪ 消息列表展示 Agent 通知会话')
   check(await fitsScreens(1.5), '⑪ 消息页不超过 1.5 屏纵向堆叠')
   await capture('10-messages.png')
-  await clickText('写歌的江离')
+  // 同行房间群聊：最后一条消息 / 时间 / 未读数 / 集合状态
+  await evaluate(`(() => { const k='sfl.session.v2'; const s=JSON.parse(sessionStorage.getItem(k)); if (s.room) { s.room.createdAt = Date.now(); sessionStorage.setItem(k, JSON.stringify(s)) } return true })()`)
+  // 清掉已读与房间快照，模拟「收到房间消息、还没进房间」
+  await evaluate(`(() => { const k='sfl.social.v1'; const s=JSON.parse(localStorage.getItem(k) || '{}'); s.read = {}; s.roomChat = {}; localStorage.setItem(k, JSON.stringify(s)); return true })()`)
+  await goto('/messages')
+  check(await waitForText('夜航计划同行组', 20000), '⑪ 消息列表增加「夜航计划同行组」群聊')
+  check(/\d+\/\d+\s*已确认/.test(await bodyText()), '⑪ 群聊行展示集合状态')
+  const unreadBefore = await navUnread()
+  check(unreadBefore !== '', '⑪ 有房间消息时底部「消息」入口显示未读红点')
+  await capture('10-messages.png')
+  await clickText('夜航计划同行组')
+  check((await currentHash()).includes('/room'), '⑪ 从消息列表点同行组直接进入房间')
+  check(await hasElement('[aria-label="返回消息列表"]'), '⑪ 房间顶部保留「‹ 消息」返回')
+  check(await waitForText(roomDraft, 10000), '⑪ 再次进入时聊天与位置保持')
+  await clickText('返回消息列表')
+  check((await currentHash()).includes('/messages'), '⑪ 返回只回到消息列表')
+  check(await waitForText('夜航计划同行组'), '⑪ 返回后房间仍在，返回不等于退出同行')
+  const unreadAfter = await navUnread()
+  check(Number(unreadBefore) - (unreadAfter === '' ? 0 : Number(unreadAfter)) === 1, '⑪ 进过房间后房间未读归零')
+  await clickTextAll(['写歌的江离', '私聊'])
   check((await currentHash()).includes('/messages/'), '⑪ 私聊拥有独立聊天室路由')
   check(await hasElement('[aria-label=语音入口]'), '⑪ 聊天室提供语音入口')
   check(await hasElement('textarea'), '⑪ 聊天室提供输入框')
@@ -484,12 +777,12 @@ try {
   await goto('/concert/night-flight/running')
   check(await waitForText('还没有开始匹配', 10000), '⑯ 进入进度页不会自动重跑')
   check(await startMatch(), '⑯ 点击「开始匹配」后才运行')
-  check(await waitForText('综合匹配度', 60000), '⑯ 评委模式下跑完自动进入匹配结果')
+  check(await waitForText('发现同频同行者', 60000), '⑯ 评委模式下跑完进入同频汇合页')
   await goto('/concert/night-flight/running')
-  check(await waitForText('查看 Agent 工作过程', 20000), '⑯ 进度页保留四阶段与工作过程入口')
+  check(await waitForText('查看 Agent 工作过程', 20000), '⑯ 双轨匹配页保留工作过程入口')
   check(await waitForText('评委演示模式'), '⑯ 出现评委模式提示条')
   await clickText('查看 Agent 工作过程')
-  check(await waitForText('工具调用步骤', 10000), '⑯ 二级页面保留完整工具调用记录')
+  check(await waitForText('工具调用步骤', 10000), '⑯ 展开后保留完整工具调用记录')
   check(await waitForText('parse_social_intent'), '⑯ 可以看到真实工具名')
   check(await waitForText('输入：'), '⑯ 可以看到输入摘要')
   check(await waitForText('输出：'), '⑯ 可以看到输出摘要')
@@ -501,7 +794,7 @@ try {
   await goto('/concert/night-flight/running')
   check(await startMatch(), '⑰ 用户点击后开始运行')
   check(await waitForText('案例 1 · 正常匹配成功', 20000), '⑰ 切换到案例 1')
-  check(await waitForText('综合匹配度', 60000), '⑰ 正常案例跑完并产出结果')
+  check(await waitForText('发现同频同行者', 60000), '⑰ 正常案例跑完并产出结果')
 
   step('⑱ 案例 2：安全条件过滤后无匹配')
   await resetDemo()
@@ -509,7 +802,7 @@ try {
   await goto('/concert/night-flight/running')
   check(await startMatch(), '⑱ 用户点击后开始运行')
   check(await waitForText('案例 2 · 安全条件过滤后无匹配', 20000), '⑱ 切换到案例 2')
-  check(await waitForText('为什么一个人都没匹配到', 60000), '⑱ 无匹配时给出明确状态与原因')
+  check(await waitForText('没有符合安全条件的同频搭子', 60000), '⑱ 无匹配时给出明确状态与原因')
   check(await waitForText('不会编造候选人'), '⑱ 明确说明不会编造候选人')
   await goto('/concert/night-flight/matches')
   check(await waitForText('没有符合硬条件的候选人', 20000), '⑱ 匹配结果页展示空结果状态')
@@ -521,7 +814,7 @@ try {
   await goto('/concert/night-flight/running')
   check(await startMatch(), '⑲ 用户点击后开始运行')
   check(await waitForText('案例 3 · 大模型不可用走 fallback', 20000), '⑲ 切换到案例 3')
-  check(await waitForText('综合匹配度', 60000), '⑲ fallback 后依然完成匹配')
+  check(await waitForText('发现同频同行者', 60000), '⑲ fallback 后依然完成匹配')
   await goto('/concert/night-flight/running')
   check(await waitForText('查看 Agent 工作过程', 20000), '⑲ 返回进度页仍可打开工作过程')
   await clickText('查看 Agent 工作过程')
@@ -532,20 +825,35 @@ try {
   await setScenario('载入较慢')
   await goto('/concert/night-flight/running')
   check(await startMatch(), '⑳ 用户点击后开始运行')
-  check(await waitForText('已用', 15000), '⑳ 弱网下展示加载进度')
-  check(await waitForText('综合匹配度', 90000), '⑳ 加载结束后仍能给出结果')
+  check(await waitForElement('[aria-label="匹配阶段"]'), '⑳ 弱网下展示匹配轨道进度')
+  check(await waitForText('发现同频同行者', 90000), '⑳ 加载结束后仍能给出结果')
 
   step('㉑ 错误状态')
+  // 「网络异常」是前端 Demo 场景注入的失败，只在 Demo 模拟 Agent 下触发。
+  // 为了让「可恢复错误状态」在任何后端配置下都被真实验证，这里临时切到 Demo 模拟 Agent，步骤结束后恢复原模式。
+  const savedAgentMode = await evaluate("localStorage.getItem('sfl.agentMode.v1') || ''")
+  await evaluate("localStorage.setItem('sfl.agentMode.v1','mock')")
+  await goto('/')
   await resetDemo()
   await setScenario('网络异常')
   await goto('/concert/night-flight/running')
   check(await startMatch(), '㉑ 用户点击后开始运行')
-  check(await waitForText('Agent 执行中断', 30000), '㉑ 模型/网络异常时给出明确错误状态')
+  check(await waitForText('这次同频中断了', 30000), '㉑ 模型/网络异常时给出明确错误状态')
   check(await waitForText('重新运行'), '㉑ 错误状态提供重新运行入口')
   check(await waitForText('返回修改需求'), '㉑ 错误状态提供返回修改需求入口')
+  // 错误状态截图也按 390×844 采集，避免出现整页滚动条与裁切
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true })
+  await sleep(350)
+  check(await fitsScreens(1.2), '㉑ 错误状态在 390×844 下不超过 1.2 屏')
+  await capture('05e-agent-error.png')
   await goto('/concert/night-flight/matches')
   check(await waitForText('匹配失败', 20000), '㉑ 匹配结果页同步展示错误状态')
   check(await waitForText('重新运行'), '㉑ 错误状态提供重新匹配入口')
+  // 恢复进入本步骤前的 Agent 运行模式
+  await evaluate(savedAgentMode
+    ? 'localStorage.setItem("sfl.agentMode.v1","' + savedAgentMode + '")'
+    : 'localStorage.removeItem("sfl.agentMode.v1")')
+  await goto('/')
 
   step('㉒ 恢复默认')
   await resetDemo()
@@ -554,7 +862,7 @@ try {
   check(await setJudge(false), '㉒ 可以关闭评委演示模式')
   await goto('/concert/night-flight/running')
   check(await startMatch(), '㉒ 用户点击后开始运行')
-  check(await waitForText('综合匹配度', 60000), '㉒ 恢复默认后 Agent 仍能跑完并停在匹配结果页')
+  check(await waitForText('发现同频同行者', 60000), '㉒ 恢复默认后 Agent 仍能跑完并停在同频汇合页')
   check(!(await bodyText()).includes('评委演示模式'), '㉒ 关闭评委模式后不再显示技术日志提示条')
 
   const finalText = await bodyText()
@@ -581,6 +889,3 @@ if (failures > 0) {
   console.log('核心演示路径全部可点击通过')
   process.exit(0)
 }
-
-
-

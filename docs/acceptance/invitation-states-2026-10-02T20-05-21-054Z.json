@@ -1,0 +1,533 @@
+{
+  "startedAt": "2026-10-02T20:02:54.673Z",
+  "base": "http://127.0.0.1:5173",
+  "api": "http://127.0.0.1:8020",
+  "injected": null,
+  "shots": {
+    "waiting": "D:\\same-frequency-live\\docs\\screenshots\\20-invitation-01-sender-waiting.png",
+    "receiver": "D:\\same-frequency-live\\docs\\screenshots\\20-invitation-02-receiver-card.png",
+    "declined": "D:\\same-frequency-live\\docs\\screenshots\\20-invitation-04-declined.png",
+    "cancelled": "D:\\same-frequency-live\\docs\\screenshots\\20-invitation-05-cancelled.png",
+    "expired": "D:\\same-frequency-live\\docs\\screenshots\\20-invitation-06-expired.png",
+    "accepted": "D:\\same-frequency-live\\docs\\screenshots\\20-invitation-03-both-accepted.png"
+  },
+  "rows": [
+    {
+      "step": "0.1 /api/ai/status 返回 200",
+      "ok": true,
+      "note": "status=200"
+    },
+    {
+      "step": "0.2 provider=deepseek",
+      "ok": true,
+      "note": "provider=deepseek"
+    },
+    {
+      "step": "0.3 agentMode=live（无 mock）",
+      "ok": true,
+      "note": "mode=live"
+    },
+    {
+      "step": "0.4 configured=true & available=true",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "0.5 forceFallback=false（未静默回退）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "0.6 邀请列表接口可用",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "1.1 需求页可输入自然语言",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "1.2 Agent 结构化理解完成",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "1.3 真实匹配完成并落在揭晓页",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "1.4 揭晓页展示双人同行票（非 loading/StateView）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "1.5 拿到真实后端会话 sessionId",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "1.6 候选中存在「写歌的江离」",
+      "ok": true,
+      "note": "u-08"
+    },
+    {
+      "step": "2.1 点击「发出同行邀请」后进入等待对方确认",
+      "ok": true,
+      "note": "via=ui"
+    },
+    {
+      "step": "2.2 状态 = awaiting_peer",
+      "ok": true,
+      "note": "status=awaiting_peer"
+    },
+    {
+      "step": "2.3 单方确认不建房（roomId 为空）",
+      "ok": true,
+      "note": "roomId=null"
+    },
+    {
+      "step": "2.4 明确提示「对方确认后才会开启房间」",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "2.5 提供「撤回邀请」「返回同频首页」",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "2.6 邀请带真实有效期（倒计时）",
+      "ok": true,
+      "note": "60s"
+    },
+    {
+      "step": "2.7 等待页无横向溢出",
+      "ok": true,
+      "note": "overflowX=0"
+    },
+    {
+      "step": "2.8 等待页文案未被截断",
+      "ok": true,
+      "note": "[]"
+    },
+    {
+      "step": "2.9 等待页底部按钮可见且 >=44px",
+      "ok": true,
+      "note": "[{\"label\":\"等待对方确认 · 1:04\",\"w\":358,\"h\":52,\"inView\":true},{\"label\":\"撤回邀请\",\"w\":175,\"h\":44,\"inView\":true},{\"label\":\"返回同频首页\",\"w\":175,\"h\":44,\"inView\":true}]"
+    },
+    {
+      "step": "2.10 未双向确认时建房接口 409",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "2.11 等待中访问房间路由被拦截回同频",
+      "ok": true,
+      "note": "#/sync"
+    },
+    {
+      "step": "2.12 返回揭晓页重新渲染同行票",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "2.13 重新选中江离",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "2.14 仍处于「等待对方确认」",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "3.1 B（写歌的江离）看到「Demo访客邀请你一起去现场」",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "3.2 邀请人显示为 Demo访客",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "3.3 卡片展示共同曲目《夜航的信》",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "3.4 卡片展示匹配理由",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "3.5 卡片展示安全集合点",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "3.6 提供「接受同行」「暂不同行」",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "3.7 拿到 inviteId",
+      "ok": true,
+      "note": "inv-e292980a9c79"
+    },
+    {
+      "step": "3.8 接收方卡片无横向溢出",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "3.9 接收方按钮可见且 >=44px",
+      "ok": true,
+      "note": "[{\"label\":\"暂不同行\",\"w\":160,\"h\":44,\"inView\":true},{\"label\":\"接受同行\",\"w\":160,\"h\":44,\"inView\":true}]"
+    },
+    {
+      "step": "4.1 A 看到「对方暂时没有接受邀请」",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "4.2 提供「换一位」「返回首页」",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "4.3 拒绝文案不带攻击性",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "4.4 拒绝不创建房间",
+      "ok": true,
+      "note": "roomId=null"
+    },
+    {
+      "step": "4.5 拒绝后建房接口 409",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "4.6 该 session 没有任何房间",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "5.1 回到对江离的「等待对方确认」",
+      "ok": true,
+      "note": "via=ui"
+    },
+    {
+      "step": "5.2 当前状态 awaiting_peer（指向江离）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "5.3 页面显示「撤回邀请」",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "5.4 B 收到待确认邀请",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "5.5 A 看到「邀请已撤回，旧邀请不能再进入房间。」",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "5.6 撤回后提供返回首页",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "5.7 B 在旧卡上点击「接受同行」",
+      "ok": true,
+      "note": "card-still-visible"
+    },
+    {
+      "step": "5.8 B 点击接受失败：没有进入房间",
+      "ok": true,
+      "note": "#/sync?demoRole=jiangli"
+    },
+    {
+      "step": "5.9 B 本地没有房间",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "5.10 撤回后接受接口 409（不建房）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "5.11 撤回后建房接口 409",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "5.12 B 的邀请列表已清空",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "6.1 撤回后返回落到 /sync",
+      "ok": true,
+      "note": "#/sync"
+    },
+    {
+      "step": "6.2 准备一条真实邀请（后端 invite 接口）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "6.3 通过真实 UI 邀请一位候选人，进入等待并开始倒计时",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "6.4 处于「等待对方确认」，真实有效期开始计时",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "6.3 超时后显示「邀请暂未得到回应，本次匹配已结束。」",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "6.4 状态 = expired",
+      "ok": true,
+      "note": "status=expired"
+    },
+    {
+      "step": "6.5 提供「重新匹配」「返回首页」",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "6.6 超时没有创建任何房间",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "7.1 再次对江离发出邀请",
+      "ok": true,
+      "note": "via=ui"
+    },
+    {
+      "step": "7.2 B 收到邀请卡",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "7.3 B 接受后进入同行房间",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "7.4 A 侧同步为已接受（2.5s 轮询生效）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "7.5 A/B 进入完全相同的 roomId",
+      "ok": true,
+      "note": "A=room-run-bb606d5c B=room-run-bb606d5c"
+    },
+    {
+      "step": "7.6 roomId 由 sessionId 决定且唯一",
+      "ok": true,
+      "note": "room-run-bb606d5c"
+    },
+    {
+      "step": "7.7 双方状态均为 accepted",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "7.8 后端只有一个该房间",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "7.9 双方刷新后仍是同一房间",
+      "ok": true,
+      "note": "A=room-run-bb606d5c B=room-run-bb606d5c"
+    },
+    {
+      "step": "7.10 B 刷新后仍在房间页",
+      "ok": true,
+      "note": "#/concert/night-flight/room"
+    },
+    {
+      "step": "7.11 A 刷新后仍是已接受",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "8.1 揭晓页左上角返回 → 同频",
+      "ok": true,
+      "note": "#/sync"
+    },
+    {
+      "step": "8.2 需求确认页左上角返回 → 同频",
+      "ok": true,
+      "note": "#/sync"
+    },
+    {
+      "step": "8.3 匹配页可开始匹配",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "8.4 匹配进行中出现「取消匹配」",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "8.5 取消匹配 → 同频",
+      "ok": true,
+      "note": "#/sync"
+    },
+    {
+      "step": "8.6 匹配页左上角返回 → 同频",
+      "ok": true,
+      "note": "#/sync"
+    },
+    {
+      "step": "8.7 浏览器返回键 → 同频（不回确认页循环）",
+      "ok": true,
+      "note": "#/sync"
+    },
+    {
+      "step": "9.1 390×844 无横向溢出",
+      "ok": true,
+      "note": ""
+    }
+  ],
+  "calls": [
+    {
+      "label": "ai-status",
+      "path": "/api/ai/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 31
+    },
+    {
+      "label": "invitations-baseline",
+      "path": "/api/agent/invitations?userId=jiangli&nickname=%E5%86%99%E6%AD%8C%E7%9A%84%E6%B1%9F%E7%A6%BB",
+      "method": "GET",
+      "status": 200,
+      "ms": 3
+    },
+    {
+      "label": "room-not-created-1",
+      "path": "/api/agent/sessions/run-bb606d5c-ab45-4ae0-8ce7-ee9ce5c33060/room",
+      "method": "POST",
+      "status": 409,
+      "ms": 10
+    },
+    {
+      "label": "room-not-created-2",
+      "path": "/api/agent/sessions/run-bb606d5c-ab45-4ae0-8ce7-ee9ce5c33060/room",
+      "method": "POST",
+      "status": 409,
+      "ms": 4
+    },
+    {
+      "label": "room-404-2",
+      "path": "/api/rooms/room-run-bb606d5c",
+      "method": "GET",
+      "status": 404,
+      "ms": 4
+    },
+    {
+      "label": "respond-after-cancel",
+      "path": "/api/agent/invitations/inv-9edb062639cb/respond",
+      "method": "POST",
+      "status": 409,
+      "ms": 9
+    },
+    {
+      "label": "room-not-created-3",
+      "path": "/api/agent/sessions/run-bb606d5c-ab45-4ae0-8ce7-ee9ce5c33060/room",
+      "method": "POST",
+      "status": 409,
+      "ms": 3
+    },
+    {
+      "label": "invitations-after-cancel",
+      "path": "/api/agent/invitations?userId=jiangli&nickname=%E5%86%99%E6%AD%8C%E7%9A%84%E6%B1%9F%E7%A6%BB",
+      "method": "GET",
+      "status": 200,
+      "ms": 17
+    },
+    {
+      "label": "room-404-expired",
+      "path": "/api/rooms/room-run-bb606d5c",
+      "method": "GET",
+      "status": 404,
+      "ms": 9
+    },
+    {
+      "label": "room-exists",
+      "path": "/api/rooms/room-run-bb606d5c",
+      "method": "GET",
+      "status": 200,
+      "ms": 9
+    }
+  ],
+  "diags": [],
+  "decoyId": "u-04",
+  "decoy2Id": "u-06",
+  "sessionId": "run-bb606d5c-ab45-4ae0-8ce7-ee9ce5c33060",
+  "candidateB": "u-08",
+  "expectedRoomId": "room-run-bb606d5c",
+  "pool": [
+    {
+      "userId": "u-05",
+      "nickname": "末班地铁乘客",
+      "score": 81
+    },
+    {
+      "userId": "u-08",
+      "nickname": "写歌的江离",
+      "score": 81
+    },
+    {
+      "userId": "u-02",
+      "nickname": "散场后还在哼歌",
+      "score": 79
+    },
+    {
+      "userId": "u-01",
+      "nickname": "靠近舞台的橘子",
+      "score": 71
+    },
+    {
+      "userId": "u-06",
+      "nickname": "荧光绿外套",
+      "score": 68
+    },
+    {
+      "userId": "u-04",
+      "nickname": "带着相机的阿澈",
+      "score": 67
+    }
+  ],
+  "ttlSeconds": 60,
+  "inviteId": "inv-e292980a9c79",
+  "roomIdA": "room-run-bb606d5c",
+  "roomIdB": "room-run-bb606d5c",
+  "total": 80,
+  "passed": 80,
+  "failed": 0
+}

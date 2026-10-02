@@ -412,11 +412,16 @@ export interface ProposedGroup {
 
 export interface PendingConfirmation {
   required: boolean
-  status: 'none' | 'awaiting_user' | 'awaiting_peer' | 'both_confirmed' | 'declined' | 'blocked' | 'confirmed'
+  /** candidate = 已找到候选人但双方都没确认；只有 invite 后才进入 awaiting_peer。 */
+  status: 'none' | 'candidate' | 'awaiting_user' | 'awaiting_peer' | 'both_confirmed' | 'accepted' | 'declined' | 'expired' | 'cancelled' | 'blocked' | 'confirmed'
+  /** 后端生成的邀请 ID：对方视角凭它接受/拒绝，撤回或过期后即失效。 */
+  inviteId?: string | null
   candidateId?: string | null
   proposerConfirmed?: boolean
   peerConfirmed?: boolean
   reason?: string
+  createdAt?: number
+  expiresAt?: number
   nextAction?: 'invite' | 'wait_peer' | 'create_room' | 'back_to_matches' | 'relax' | string
 }
 

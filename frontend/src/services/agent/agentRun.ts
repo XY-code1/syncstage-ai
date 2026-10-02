@@ -1,6 +1,7 @@
 import type { AgentState, AuthorizationScope, DemoCase, DemoScenario, ParsedIntent, ToolTrace } from '../../types'
 import { runAgent } from '../../lib/agentMock'
 import {
+  AGENT_LIVE_RUN_TIMEOUT_MS,
   AGENT_RUN_TIMEOUT_MS,
   AgentRunAbortedError,
   AgentRunTimeoutError,
@@ -95,6 +96,8 @@ async function runMockTask(options: AgentTaskOptions, signal: AbortSignal): Prom
 }
 
 export async function runAgentTask(options: AgentTaskOptions): Promise<AgentState> {
+  // mock 流程固定 10 秒收尾；live 要真的等模型，预算放宽到 45 秒，但同样有界。
+  const budgetMs = options.provider.mode === 'mock' ? AGENT_RUN_TIMEOUT_MS : AGENT_LIVE_RUN_TIMEOUT_MS
   const controller = new AbortController()
   let timedOut = false
   const onExternalAbort = () => controller.abort()
@@ -102,7 +105,7 @@ export async function runAgentTask(options: AgentTaskOptions): Promise<AgentStat
   const timer = setTimeout(() => {
     timedOut = true
     controller.abort()
-  }, AGENT_RUN_TIMEOUT_MS)
+  }, budgetMs)
 
   try {
     return await (options.provider.mode === 'mock'
@@ -110,7 +113,7 @@ export async function runAgentTask(options: AgentTaskOptions): Promise<AgentStat
       : runLiveTask(options, controller.signal))
   } catch (error) {
     if (timedOut) {
-      throw new AgentRunTimeoutError('Agent 运行超过 10 秒仍未结束，已自动中止；没有拿到结果，请重新运行')
+      throw new AgentRunTimeoutError('Agent 运行超过 ' + Math.round(budgetMs / 1000) + ' 秒仍未结束，已自动中止；没有拿到结果，请重新运行')
     }
     if (options.signal.aborted) {
       throw new AgentRunAbortedError('本次运行已取消')

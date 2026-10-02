@@ -1,7 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom'
 import { AgentEvidenceBody } from '../components/AgentEvidence'
 import { PageShell } from '../components/PageShell'
-import { MockNotice } from '../components/QQMusicBar'
 import { DemoBadge, StateView } from '../components/ui'
 import { useSession } from '../store/session'
 
@@ -38,7 +37,6 @@ export function AgentTracePage() {
     >
       <div className='animate-fade flex flex-col gap-4'>
         <AgentEvidenceBody agent={agent} focus={agent.rankedCandidates[0] ?? null} />
-        <MockNotice compact />
       </div>
     </PageShell>
   )

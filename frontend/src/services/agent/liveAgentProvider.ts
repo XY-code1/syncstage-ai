@@ -26,8 +26,12 @@ import {
 export const LIVE_AGENT_LABEL = '真实模型 Agent'
 export const LIVE_AGENT_NOTICE = '由后端调用已配置的大模型生成，失败会明确报错'
 
-/** live 模式下与模型/会话相关的请求超时（整体预算由 runAgentTask 控制）。 */
-const LIVE_REQUEST_TIMEOUT_MS = 9000
+/**
+ * live 模式下与模型/会话相关的请求超时。
+ * 后端要串行调用多次模型（已并行优化），实测 6～12 秒；这里给 40 秒有界预算，
+ * 整体预算仍由 runAgentTask 统一控制，超时会明确报错，不会无限等待。
+ */
+const LIVE_REQUEST_TIMEOUT_MS = 40000
 
 /** 最近一次 live 会话。那些"由后端会话内部完成"的步骤从这里读真实数据。 */
 let lastSession: AgentState | null = null

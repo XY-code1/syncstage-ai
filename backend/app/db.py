@@ -62,6 +62,15 @@ CREATE TABLE IF NOT EXISTS reports (
     status TEXT NOT NULL DEFAULT 'pending',
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS room_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_id TEXT NOT NULL,
+    sender_id TEXT NOT NULL,
+    sender_name TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 '''
 
 
@@ -177,19 +186,22 @@ def create_room(
     now = _now()
     with get_connection() as connection:
         connection.execute(
-            'INSERT OR REPLACE INTO rooms (room_id, concert_id, payload, status, created_at) VALUES (?, ?, ?, ?, ?)',
+            'INSERT OR IGNORE INTO rooms (room_id, concert_id, payload, status, created_at) VALUES (?, ?, ?, ?, ?)',
             (room_id, concert_id, json.dumps(payload, ensure_ascii=False), 'active', now),
         )
-    return {**payload, 'roomId': room_id, 'status': 'active', 'createdAt': now}
+        row = connection.execute('SELECT payload, created_at FROM rooms WHERE room_id = ?', (room_id,)).fetchone()
+    saved = json.loads(row['payload']) if row else payload
+    return {**saved, 'roomId': room_id, 'status': 'active', 'createdAt': row['created_at'] if row else now}
 
 
 def get_room(room_id: str) -> dict[str, Any] | None:
     with get_connection() as connection:
-        row = connection.execute('SELECT payload FROM rooms WHERE room_id = ?', (room_id,)).fetchone()
+        row = connection.execute('SELECT payload, created_at FROM rooms WHERE room_id = ?', (room_id,)).fetchone()
     if row is None:
         return None
     payload = json.loads(row['payload'])
     payload['roomId'] = room_id
+    payload.setdefault('createdAt', row['created_at'])
     return payload
 
 
@@ -201,3 +213,56 @@ def create_feedback(session_id: str, rating: str, payload: dict[str, Any]) -> di
         )
         feedback_id = cursor.lastrowid
     return {'id': feedback_id, 'sessionId': session_id, 'rating': rating, 'status': 'recorded'}
+
+
+# ---------------------------------------------------------------------------
+# 同行房间的真实双人消息（后端持久化；前端 2 秒轮询增量拉取）
+# ---------------------------------------------------------------------------
+
+
+def append_room_message(room_id: str, sender_id: str, sender_name: str, content: str) -> dict[str, Any]:
+    '''写入一条真人消息；只落库，不触发任何模型或模拟回复。'''
+
+    now = _now()
+    with get_connection() as connection:
+        cursor = connection.execute(
+            'INSERT INTO room_messages (room_id, sender_id, sender_name, content, created_at) '
+            'VALUES (?, ?, ?, ?, ?)',
+            (room_id, sender_id, sender_name, content, now),
+        )
+        message_id = cursor.lastrowid
+    return {
+        'id': message_id,
+        'roomId': room_id,
+        'senderId': sender_id,
+        'senderName': sender_name,
+        'content': content,
+        'createdAt': now,
+    }
+
+
+def list_room_messages(room_id: str, after: int | None = None) -> list[dict[str, Any]]:
+    '''按 id 升序返回消息；after 用于轮询时只取增量。'''
+
+    query = (
+        'SELECT id, room_id, sender_id, sender_name, content, created_at '
+        'FROM room_messages WHERE room_id = ?'
+    )
+    params: list[Any] = [room_id]
+    if after is not None:
+        query += ' AND id > ?'
+        params.append(after)
+    query += ' ORDER BY id'
+    with get_connection() as connection:
+        rows = connection.execute(query, params).fetchall()
+    return [
+        {
+            'id': row['id'],
+            'roomId': row['room_id'],
+            'senderId': row['sender_id'],
+            'senderName': row['sender_name'],
+            'content': row['content'],
+            'createdAt': row['created_at'],
+        }
+        for row in rows
+    ]

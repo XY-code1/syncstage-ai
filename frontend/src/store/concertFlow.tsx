@@ -10,8 +10,12 @@ export interface ConcertFlowState {
   selectedCandidateId: string | null
   handshakeStatus: 'idle' | 'reviewed' | 'confirmed'
   roomId: string | null
+  /** 「暂不同行」标记过的候选人：只用于优化下一轮匹配，不会通知对方 */
+  skippedCandidateIds: string[]
+  /** 「暂不同行」的理由（userId:理由），只存在本机 */
+  negativeFeedback: string[]
 }
-const EMPTY: ConcertFlowState = { consentStatus: 'unknown', consentScopes: [], intent: null, agentRunId: null, selectedCandidateId: null, handshakeStatus: 'idle', roomId: null }
+const EMPTY: ConcertFlowState = { consentStatus: 'unknown', consentScopes: [], intent: null, agentRunId: null, selectedCandidateId: null, handshakeStatus: 'idle', roomId: null, skippedCandidateIds: [], negativeFeedback: [] }
 const KEY = 'syncstage.concertFlow.v1'
 type Store = Record<string, ConcertFlowState>
 const Context = createContext<{ get: (id: string) => ConcertFlowState; patch: (id: string, value: Partial<ConcertFlowState>) => void } | null>(null)

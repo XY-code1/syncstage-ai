@@ -50,6 +50,20 @@ export function ScoreBars({ breakdown }: { breakdown: ScoredCandidate['scoreBrea
   )
 }
 
+/** 偏好明细（不含权重与分值）：只回答「你们在哪几件事上像」 */
+export function PreferenceNotes({ breakdown }: { breakdown: ScoredCandidate['scoreBreakdown'] }) {
+  return (
+    <div className='flex flex-col gap-2'>
+      {breakdown.dimensions.map((dimension) => (
+        <div key={dimension.id} className='rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2'>
+          <p className='text-[11.5px] text-ink-100'>{dimension.label}</p>
+          <p className='mt-1 text-[11px] leading-relaxed text-white/60'>{dimension.detail}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function EvidenceList({ candidate, compact }: { candidate: ScoredCandidate; compact?: boolean }) {
   return (
     <div className='flex flex-col gap-1.5'>
@@ -76,13 +90,22 @@ export function EvidenceList({ candidate, compact }: { candidate: ScoredCandidat
  * 「查看 Agent 依据」抽屉与「Agent 工作过程」二级页面共用同一份内容，
  * 保证一级页面精简的同时不丢失任何工具调用记录。
  */
-export function AgentEvidenceBody({ agent, focus }: { agent: AgentState; focus?: ScoredCandidate | null }) {
+export function AgentEvidenceBody({
+  agent,
+  focus,
+  stages = MATCH_STAGES,
+}: {
+  agent: AgentState
+  focus?: ScoredCandidate | null
+  /** 阶段口径：默认四阶段；双轨匹配页传五个阶段，顺序与后端流水线一致 */
+  stages?: Array<{ id: string; label: string; detail: string; phases: string[] }>
+}) {
   return (
     <div className='flex flex-col gap-5'>
       <div>
-        <SectionTitle title='四个阶段的完成情况' hint='一级页面只讲人话，这里是阶段与内部步骤的对应关系' />
+        <SectionTitle title='阶段与内部步骤的对应关系' hint='一级页面只讲人话，技术细节全部留在这里' />
         <div className='flex flex-col gap-2'>
-          {MATCH_STAGES.map((stage, index) => {
+          {stages.map((stage, index) => {
             const steps = agent.trace.filter((step) => stage.phases.includes(step.phase))
             const done = steps.length > 0
             return (
@@ -153,16 +176,16 @@ export function AgentEvidenceBody({ agent, focus }: { agent: AgentState; focus?:
       </div>
 
       <div>
-        <SectionTitle title='被排除的候选人' hint={`共 ${agent.excludedCandidates.length} 人，都是硬条件命中的结果`} />
+        <SectionTitle title='被硬条件过滤的人' hint={`共 ${agent.excludedCandidates.length} 人；只在这里留痕，页面主体不会出现红叉或淘汰文案`} />
         {agent.excludedCandidates.length === 0 ? (
-          <p className='text-[11.5px] text-white/45'>这一轮没有被硬条件排除的候选人。</p>
+          <p className='text-[11.5px] text-white/45'>这一轮没有被硬条件过滤的人。</p>
         ) : (
           <div className='flex flex-col gap-2'>
             {agent.excludedCandidates.map((item) => (
               <div key={item.userId} className='rounded-2xl border border-white/8 bg-white/[0.025] px-3 py-2.5'>
                 <div className='flex items-center gap-2'>
                   <span className='text-[12px] text-white/80'>{item.nickname}</span>
-                  <span className='rounded-pill border border-rose-400/35 bg-rose-400/10 px-1.5 py-[1px] text-[10px] text-rose-300'>
+                  <span className='rounded-pill border border-warm-400/35 bg-warm-400/10 px-1.5 py-[1px] text-[10px] text-warm-400'>
                     {item.rule}
                   </span>
                 </div>

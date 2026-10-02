@@ -37,7 +37,16 @@ export function MessagesPage() {
               <p className='mt-1 text-[11px] text-white/40'>完成一次匹配或加入临时房间后，消息会出现在这里。</p>
             </div>
           ) : (
-            visible.map((thread) => <ThreadRow key={thread.id} thread={thread} onOpen={() => navigate(`/messages/${thread.id}`)} />)
+            visible.map((thread) => (
+              <ThreadRow
+                key={thread.id}
+                thread={thread}
+                onOpen={() =>
+                  // 同行房间就是消息模块里的一个群聊：列表里点它直接进房间，而不是另一个聊天页
+                  navigate(thread.kind === 'group' && thread.concertId ? `/concert/${thread.concertId}/room` : `/messages/${thread.id}`)
+                }
+              />
+            ))
           )}
         </div>
 
@@ -50,9 +59,14 @@ export function MessagesPage() {
 }
 
 function ThreadRow({ thread, onOpen }: { thread: Thread; onOpen: () => void }) {
-  const { messagesOf, unreadOf } = useSocial()
+  const { messagesOf, unreadOf, roomChatOf } = useSocial()
   const unread = unreadOf(thread)
+  // 同行房间会把"最后一条消息 / 时间 / 集合状态"广播过来；没有房间时退回群聊自身的数据
+  const roomChat = roomChatOf(thread.id)
   const last = messagesOf(thread.id).slice(-1)[0]
+  const preview = roomChat?.preview || last?.text || thread.subtitle
+  const time = roomChat?.time || thread.time
+  const status = roomChat?.meetingLabel || thread.statusLabel
 
   return (
     <button type='button' onClick={onOpen} className='soft-card flex w-full items-center gap-3 p-3 text-left'>
@@ -77,11 +91,16 @@ function ThreadRow({ thread, onOpen }: { thread: Thread; onOpen: () => void }) {
           <span className='shrink-0 rounded-pill border border-white/8 px-1.5 py-[1px] text-[9.5px] text-white/40'>
             {THREAD_KIND_LABEL[thread.kind]}
           </span>
+          {status ? (
+            <span className='shrink-0 rounded-pill border border-brand-500/30 bg-brand-500/[.08] px-1.5 py-[1px] text-[9.5px] text-brand-200'>
+              {status}
+            </span>
+          ) : null}
         </span>
-        <span className='mt-0.5 block truncate text-[11.5px] text-white/45'>{last?.text ?? thread.subtitle}</span>
+        <span className='mt-0.5 block truncate text-[11.5px] text-white/45'>{preview}</span>
       </span>
       <span className='flex shrink-0 flex-col items-end gap-1.5'>
-        <span className='text-[10.5px] text-white/35'>{thread.time}</span>
+        <span className='text-[10.5px] text-white/35'>{time}</span>
         {unread > 0 ? (
           <span className='flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-500 px-1 text-[9.5px] font-semibold text-stage-950'>
             {unread}

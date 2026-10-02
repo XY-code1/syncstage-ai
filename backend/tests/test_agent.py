@@ -175,15 +175,57 @@ def test_room_requires_mutual_confirmation() -> None:
         assert still_blocked.status_code == 409
 
         peer = client.post('/api/agent/sessions/' + session_id + '/peer-confirm', json={'accept': True})
-        assert peer.json()['pendingConfirmation']['status'] == 'both_confirmed'
-
-        created = client.post('/api/agent/sessions/' + session_id + '/room')
-        assert created.status_code == 200
-        body = created.json()
+        assert peer.status_code == 200
+        body = peer.json()
+        assert body['pendingConfirmation']['status'] == 'accepted'
         assert body['roomId']
         assert body['status'] == 'room_created'
+        created = client.post('/api/agent/sessions/' + session_id + '/room')
+        assert created.status_code == 200
+        assert created.json()['roomId'] == body['roomId']
         room_step = [item for item in body['trace'] if item['name'] == 'create_temporary_room'][-1]
         assert '公开集合点' in room_step['outputSummary']
+
+
+def test_invite_decline_expire_cancel_and_idempotent_room() -> None:
+    with TestClient(app) as client:
+        # 拒绝：不建房。
+        declined = _start(client)
+        sid = declined['sessionId']
+        partner = declined['rankedCandidates'][0]['userId']
+        client.post(f'/api/agent/sessions/{sid}/invite', json={'candidateId': partner})
+        response = client.post(f'/api/agent/sessions/{sid}/peer-confirm', json={'accept': False})
+        assert response.json()['pendingConfirmation']['status'] == 'declined'
+        assert response.json()['roomId'] is None
+        assert client.post(f'/api/agent/sessions/{sid}/room').status_code == 409
+
+        # 撤回后旧邀请不可接受。
+        cancelled = _start(client)
+        sid = cancelled['sessionId']
+        partner = cancelled['rankedCandidates'][0]['userId']
+        client.post(f'/api/agent/sessions/{sid}/invite', json={'candidateId': partner})
+        response = client.post(f'/api/agent/sessions/{sid}/cancel-invite')
+        assert response.json()['pendingConfirmation']['status'] == 'cancelled'
+        assert client.post(f'/api/agent/sessions/{sid}/peer-confirm', json={'accept': True}).status_code == 409
+        assert response.json()['roomId'] is None
+
+        # 超时后旧邀请失效。
+        expired = _start(client)
+        sid = expired['sessionId']
+        partner = expired['rankedCandidates'][0]['userId']
+        client.post(f'/api/agent/sessions/{sid}/invite', json={'candidateId': partner})
+        response = client.post(f'/api/agent/sessions/{sid}/expire-invite')
+        assert response.json()['pendingConfirmation']['status'] == 'expired'
+        assert client.post(f'/api/agent/sessions/{sid}/peer-confirm', json={'accept': True}).status_code == 409
+
+        # 接受只生成一个确定性 roomId；重复建房仍返回同一个。
+        accepted = _start(client)
+        sid = accepted['sessionId']
+        partner = accepted['rankedCandidates'][0]['userId']
+        client.post(f'/api/agent/sessions/{sid}/invite', json={'candidateId': partner})
+        first = client.post(f'/api/agent/sessions/{sid}/peer-confirm', json={'accept': True}).json()
+        second = client.post(f'/api/agent/sessions/{sid}/room').json()
+        assert first['roomId'] == second['roomId']
 
 
 def test_a2a_exchange_is_structured_and_contains_no_sensitive_fields() -> None:

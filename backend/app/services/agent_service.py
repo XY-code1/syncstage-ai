@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -177,27 +178,78 @@ class AgentService:
                 report['icebreakers'] = {'source': 'rules', 'items': [], 'note': '没有共同歌曲，未生成破冰问题'}
             return report
 
-        for item in (state.ranked_candidates or [])[:3]:
+        async def explain_one(item: dict[str, Any]):
+            """跑一位候选人的模型理由；异常必须返回而不是抛出，否则会取消其它并行调用。"""
+
             candidate = item.get('candidate') or {}
-            user_id = str(item.get('userId') or candidate.get('userId') or '')
-            allowed = set(item.get('sharedSongs') or []) | set(candidate.get('topArtists') or []) | set(item.get('sharedSafety') or [])
+            # 只把确定性层已经算好的事实交给模型：模型负责措辞，不负责发明素材。
+            shared_songs = list(item.get('sharedSongs') or [])
+            expected_tracks = list(item.get('sharedExpectedTracks') or [])
+            shared_artists = list(item.get('sharedArtists') or [])
+            shared_tags = list(item.get('sharedTags') or [])
+            shared_purposes = list(item.get('sharedPurposes') or [])
+            shared_safety = list(item.get('sharedSafety') or [])
+            top_artists = list(candidate.get('topArtists') or [])
+            allowed = (
+                set(shared_songs)
+                | set(expected_tracks)
+                | set(shared_artists)
+                | set(top_artists)
+                | set(shared_tags)
+                | set(shared_purposes)
+                | set(shared_safety)
+            )
             context = {
                 'concertId': state.event_id,
                 'candidate': {
                     'nickname': candidate.get('nickname'),
-                    'sharedSongs': item.get('sharedSongs') or [],
-                    'topArtists': candidate.get('topArtists') or [],
-                    'sharedPurposes': item.get('sharedPurposes') or [],
-                    'sharedSafety': item.get('sharedSafety') or [],
+                    'sharedSongs': shared_songs,
+                    'sharedExpectedTracks': expected_tracks,
+                    'sharedArtists': shared_artists,
+                    'sharedTags': shared_tags,
+                    'topArtists': top_artists,
+                    'sharedPurposes': shared_purposes,
+                    'sharedSafety': shared_safety,
                 },
+                'evidence': list(item.get('evidence') or []),
                 'score': item.get('score'),
                 'scoreBreakdown': item.get('scoreBreakdown') or {},
             }
             try:
                 result = await self.gateway.generate_explanation(context, allowed_terms=allowed)
             except LLMError as error:
+                return item, error, None
+            return item, None, result
+
+        async def icebreakers_one():
+            shared = _top_shared(state)
+            try:
+                result = await self.gateway.generate_icebreakers(
+                    {
+                        'concertId': state.event_id,
+                        'sharedSongs': shared,
+                        'purposes': list((state.parsed_intent.purposes if state.parsed_intent else []) or []),
+                    },
+                    ICEBREAKER_SCHEMA,
+                )
+            except LLMError as error:
+                return error, None
+            return None, result
+
+        # 这些模型调用互不依赖：串行时要跑 4 次往返，很容易把前端的请求预算耗光；
+        # 并行后总耗时≈最慢的一次，仍然只有一轮，不做任何重试循环。
+        explain_results, (ice_error, ice_result) = await asyncio.gather(
+            asyncio.gather(*(explain_one(item) for item in (state.ranked_candidates or [])[:3])),
+            icebreakers_one(),
+        )
+
+        for item, error, result in explain_results:
+            candidate = item.get('candidate') or {}
+            user_id = str(item.get('userId') or candidate.get('userId') or '')
+            nickname = str(candidate.get('nickname') or user_id)
+            if error is not None:
                 report['explanations'][user_id] = {'source': 'rules', 'reason': '', 'note': error.code + '：' + error.message}
-                report['notes'].append('候选人 ' + (candidate.get('nickname') or user_id) + ' 的模型理由未生成（' + error.code + '）')
+                report['notes'].append('候选人 ' + nickname + ' 的模型理由未生成（' + error.code + '）')
                 continue
             item['modelReason'] = result['payload']['reason']
             item['reasonSource'] = 'model'
@@ -208,21 +260,11 @@ class AgentService:
                 'note': '',
             }
 
-        shared = _top_shared(state)
-        try:
-            result = await self.gateway.generate_icebreakers(
-                {
-                    'concertId': state.event_id,
-                    'sharedSongs': shared,
-                    'purposes': list((state.parsed_intent.purposes if state.parsed_intent else []) or []),
-                },
-                ICEBREAKER_SCHEMA,
-            )
-        except LLMError as error:
-            report['icebreakers'] = {'source': 'rules', 'items': [], 'note': error.code + '：' + error.message}
-            report['notes'].append('模型破冰问题未生成（' + error.code + '），沿用房间里的本地话题')
+        if ice_error is not None:
+            report['icebreakers'] = {'source': 'rules', 'items': [], 'note': ice_error.code + '：' + ice_error.message}
+            report['notes'].append('模型破冰问题未生成（' + ice_error.code + '），沿用房间里的本地话题')
         else:
-            report['icebreakers'] = {'source': 'model', 'items': result['payload']['questions'], 'note': ''}
+            report['icebreakers'] = {'source': 'model', 'items': ice_result['payload']['questions'], 'note': ''}
         return report
 
 

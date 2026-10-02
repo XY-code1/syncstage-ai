@@ -1,0 +1,38 @@
+[
+  {
+    "label": "首页（未汇合）",
+    "smallTargets": [],
+    "covered": [],
+    "clipped": [],
+    "contrastChecked": 12,
+    "contrastFails": 1,
+    "worst": [
+      {
+        "text": "开始同频",
+        "ratio": 1.02,
+        "need": 4.5,
+        "size": 15,
+        "color": "rgb(11, 13, 15)",
+        "where": "button.inline-flex.items-center.justify-center"
+      }
+    ]
+  },
+  {
+    "label": "Agent 匹配中（正在汇合）",
+    "smallTargets": [],
+    "covered": [],
+    "clipped": [],
+    "contrastChecked": 3,
+    "contrastFails": 0,
+    "worst": []
+  },
+  {
+    "label": "匹配揭晓（双人同行票）",
+    "smallTargets": [],
+    "covered": [],
+    "clipped": [],
+    "contrastChecked": 10,
+    "contrastFails": 0,
+    "worst": []
+  }
+]

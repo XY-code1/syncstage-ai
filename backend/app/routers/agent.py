@@ -10,6 +10,7 @@ from app.agent.schemas import (
     ChatRequest,
     FeedbackRequest,
     IntentParseRequest,
+    InvitationRespondRequest,
     InviteRequest,
     PeerConfirmRequest,
 )
@@ -144,6 +145,49 @@ async def peer_confirm(session_id: str, payload: PeerConfirmRequest) -> dict:
         state = await orch.get_orchestrator().peer_confirm(session_id, payload.accept)
     except KeyError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return state.to_dict()
+
+
+@router.post('/sessions/{session_id}/cancel-invite')
+async def cancel_invite(session_id: str) -> dict:
+    try:
+        return (await orch.get_orchestrator().cancel_invite(session_id)).to_dict()
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.post('/sessions/{session_id}/expire-invite')
+async def expire_invite(session_id: str) -> dict:
+    try:
+        return (await orch.get_orchestrator().cancel_invite(session_id, expired=True)).to_dict()
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@router.get('/invitations')
+def list_invitations(userId: str = '', nickname: str = '') -> dict:
+    """对方视角：列出正在等待我确认的同行邀请（只读，不建房、不调用模型）。
+
+    Demo 双身份可用 nickname 把演示替身映射到真实候选人，例如 userId=jiangli&nickname=写歌的江离。
+    """
+
+    return {'invitations': orch.get_orchestrator().list_invitations(userId.strip(), nickname.strip())}
+
+
+@router.post('/invitations/{invite_id}/respond')
+async def respond_invitation(invite_id: str, payload: InvitationRespondRequest) -> dict:
+    """对方视角的接受/拒绝。撤回、过期、已接受的邀请一律 409，且绝不建房。"""
+
+    try:
+        state = await orch.get_orchestrator().respond_invitation(invite_id, payload.accept)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail=str(error).strip("'")) from error
     except ValueError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     return state.to_dict()

@@ -1,0 +1,185 @@
+{
+  "ranAt": "2026-10-02T09:25:53.391Z",
+  "base": "http://127.0.0.1:5173",
+  "api": "http://127.0.0.1:8020",
+  "roomId": "room-demo-dual",
+  "urls": {
+    "visitor": "http://127.0.0.1:5173/#/room/room-demo-dual?demoRole=visitor",
+    "jiangli": "http://127.0.0.1:5173/#/room/room-demo-dual?demoRole=jiangli"
+  },
+  "total": 28,
+  "passed": 28,
+  "failed": 0,
+  "rows": [
+    {
+      "step": "第0步 后端存在演示房间 roomId=room-demo-dual",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第1步 A 端（普通窗口 profile）进入房间，输入框可用",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第1步 B 端（无痕/隔离 profile）进入同一 roomId，输入框可用",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第1步 A 端顶部显示「当前身份：Demo访客」",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第1步 B 端顶部显示「当前身份：写歌的江离」",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第1步 A 端不显示 B 的身份（各自独立）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第1步 身份各自存在本 tab 的 sessionStorage，互不覆盖",
+      "ok": true,
+      "note": "A=visitor B=jiangli"
+    },
+    {
+      "step": "第1步 身份不写 localStorage（避免两个浏览器互相覆盖）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第1步 两个上下文本地都没有房间状态（只凭 roomId 进入）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第1步 B 端此时还没有 A 的消息",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第2步 A 端输入真人消息",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第2步 A 端点击发送",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第2步 A 端本地看到自己发出的消息",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第2步 B 端在另一个隔离浏览器里收到 A 的消息",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第3步 B 端输入回复",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第3步 B 端点击发送",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第3步 B 端本地看到自己的回复",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第3步 A 端收到 B 的回复",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第4步 A 端刷新后两条消息都还在",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第4步 B 端刷新后两条消息都还在",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第4步 刷新后 A 端身份仍为 Demo访客（sessionStorage 恢复）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第4步 刷新后 B 端身份仍为 写歌的江离（sessionStorage 恢复）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第5步 两条消息由后端保存，刷新/换实例都能读到",
+      "ok": true,
+      "note": "count=2"
+    },
+    {
+      "step": "第5步 每条消息字段完整（id/roomId/senderId/senderName/content/createdAt）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第5步 发送者恰为 demo-visitor 与 jiangli 两个真人身份",
+      "ok": true,
+      "note": "demo-visitor,jiangli"
+    },
+    {
+      "step": "第5步 等待 4.5s 没有任何第三方 / AI / mock 自动回复",
+      "ok": true,
+      "note": "extra=0"
+    },
+    {
+      "step": "第5步 页面没有「模拟联系人」或 AI 冒充回复入口",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第5步 本次演示确实由两个真人身份各发了一条",
+      "ok": true,
+      "note": "senders=2"
+    }
+  ],
+  "calls": [
+    {
+      "label": "room-read",
+      "path": "/api/rooms/room-demo-dual",
+      "method": "GET",
+      "status": 200,
+      "ms": 29
+    },
+    {
+      "label": "room-messages-before",
+      "path": "/api/rooms/room-demo-dual/messages",
+      "method": "GET",
+      "status": 200,
+      "ms": 5
+    },
+    {
+      "label": "room-messages",
+      "path": "/api/rooms/room-demo-dual/messages",
+      "method": "GET",
+      "status": 200,
+      "ms": 5
+    },
+    {
+      "label": "room-messages-after",
+      "path": "/api/rooms/room-demo-dual/messages?after=14",
+      "method": "GET",
+      "status": 200,
+      "ms": 4
+    }
+  ]
+}

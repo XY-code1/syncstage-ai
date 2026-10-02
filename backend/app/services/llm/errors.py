@@ -16,6 +16,7 @@ LLM_AUTH_FAILED = 'LLM_AUTH_FAILED'
 LLM_MODEL_NOT_FOUND = 'LLM_MODEL_NOT_FOUND'
 LLM_BAD_REQUEST = 'LLM_BAD_REQUEST'
 LLM_RATE_LIMITED = 'LLM_RATE_LIMITED'
+LLM_INSUFFICIENT_BALANCE = 'LLM_INSUFFICIENT_BALANCE'
 LLM_TIMEOUT = 'LLM_TIMEOUT'
 LLM_CONNECTION = 'LLM_CONNECTION'
 LLM_UPSTREAM_ERROR = 'LLM_UPSTREAM_ERROR'
@@ -28,6 +29,7 @@ ERROR_MESSAGES: dict[str, str] = {
     LLM_MODEL_NOT_FOUND: '大模型服务里找不到配置的 model',
     LLM_BAD_REQUEST: '大模型认为请求格式不合法',
     LLM_RATE_LIMITED: '大模型触发了限流，请稍后重试',
+    LLM_INSUFFICIENT_BALANCE: 'DeepSeek 账户余额不足，这次匹配没能完成',
     LLM_TIMEOUT: '等待大模型响应超时',
     LLM_CONNECTION: '无法连接大模型服务',
     LLM_UPSTREAM_ERROR: '大模型服务返回了错误',
@@ -42,6 +44,7 @@ STATUS_BY_CODE: dict[str, int] = {
     LLM_MODEL_NOT_FOUND: 400,
     LLM_BAD_REQUEST: 400,
     LLM_RATE_LIMITED: 429,
+    LLM_INSUFFICIENT_BALANCE: 429,
     LLM_TIMEOUT: 504,
     LLM_CONNECTION: 502,
     LLM_UPSTREAM_ERROR: 502,
@@ -70,12 +73,15 @@ class LLMError(RuntimeError):
         hint: str = '',
         upstream_status: int | None = None,
         detail: str = '',
+        request_id: str = '',
     ) -> None:
         self.code = code
         self.message = message or ERROR_MESSAGES.get(code, '大模型调用失败')
         self.hint = hint
         self.upstream_status = upstream_status
         self.detail = redact(detail)[:600]
+        # 上游请求号只用于排查，不含任何密钥；有就带出来，方便与上游日志对账。
+        self.request_id = request_id
         super().__init__(self.message)
 
     def to_dict(self) -> dict[str, Any]:
@@ -86,6 +92,8 @@ class LLMError(RuntimeError):
         }
         if self.upstream_status is not None:
             payload['upstreamStatus'] = self.upstream_status
+        if self.request_id:
+            payload['requestId'] = self.request_id
         if self.detail:
             payload['detail'] = self.detail
         return payload

@@ -13,6 +13,7 @@ export function Avatar({
   className,
   showRing,
   src,
+  silhouette,
 }: {
   name: string
   from: string
@@ -22,8 +23,34 @@ export function Avatar({
   showRing?: boolean
   /** 自定义头像（data URL / 图片地址），用于"我的"当前用户 */
   src?: string | null
+  /** 匿名剪影：尚未揭晓的候选轨迹端点，不显示首字母，避免像表单占位符 */
+  silhouette?: boolean
 }) {
   const ring = showRing ? 'ring-2 ring-brand-500/45 ring-offset-2 ring-offset-stage-950' : undefined
+  if (silhouette) {
+    return (
+      <div
+        className={cn(
+          'flex shrink-0 items-center justify-center rounded-full border border-dashed border-white/25 bg-white/[0.05]',
+          ring,
+          className,
+        )}
+        style={{ width: size, height: size }}
+        aria-hidden='true'
+      >
+        <svg
+          viewBox='0 0 24 24'
+          width={Math.round(size * 0.54)}
+          height={Math.round(size * 0.54)}
+          className='text-white/35'
+          fill='currentColor'
+        >
+          <circle cx='12' cy='8.6' r='3.7' />
+          <path d='M4.9 20.2c0-3.7 3.2-6.3 7.1-6.3s7.1 2.6 7.1 6.3z' />
+        </svg>
+      </div>
+    )
+  }
   if (src) {
     return (
       <img

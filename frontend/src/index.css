@@ -240,3 +240,351 @@
     transform: scale(1.04);
   }
 }
+
+
+/* ------------------------------------------------------------------
+   音乐雷达 / 唱片 / 声波：Agent 匹配页与结果页的视觉元素
+   全部动画都在 prefers-reduced-motion 下关闭（见文件末尾）。
+------------------------------------------------------------------ */
+@layer components {
+  /* 黑胶旋转、声波流动、均衡器起伏都由 GSAP 驱动（见 lib/gsapSetup.ts），
+     这里只保留静态外形与仍然走 CSS 的雷达扫描。 */
+  .radar-sweep {
+    animation: sfl-sweep 2.6s linear infinite;
+    transform-origin: 50% 50%;
+  }
+
+  .radar-dot {
+    animation: sfl-dot 0.9s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+  }
+
+  .radar-pulse {
+    animation: sfl-pulse-soft 2.4s ease-in-out infinite;
+  }
+
+  .animate-merge {
+    animation: sfl-merge 0.9s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+  }
+
+  .animate-merge-right {
+    animation: sfl-merge-right 0.9s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+  }
+
+  .snap-row {
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .snap-card {
+    scroll-snap-align: center;
+  }
+
+  /* 双轨声波：位置与宽度随真实进度切换，两个陌生人从尚未汇合走向在共同歌曲封面处汇合 */
+  .track-shift {
+    transition:
+      left 820ms cubic-bezier(0.22, 0.9, 0.3, 1),
+      right 820ms cubic-bezier(0.22, 0.9, 0.3, 1),
+      width 820ms cubic-bezier(0.22, 0.9, 0.3, 1),
+      height 820ms cubic-bezier(0.22, 0.9, 0.3, 1),
+      opacity 420ms ease,
+      transform 820ms cubic-bezier(0.22, 0.9, 0.3, 1);
+  }
+
+  .track-glow {
+    filter: blur(10px);
+  }
+
+  /* 只给真正在跑的 GSAP 元素加 will-change，不全局打开 */
+  .gsap-transform {
+    will-change: transform;
+  }
+
+  .orbit-spin {
+    animation: sfl-spin 22s linear infinite;
+  }
+
+  .orbit-spin-rev {
+    animation: sfl-spin 32s linear infinite reverse;
+  }
+
+  .node-float {
+    animation: sfl-float 5s ease-in-out infinite;
+  }
+
+  .sync-breathe {
+    animation: sfl-breathe 3.2s ease-in-out infinite;
+  }
+
+  .fx-particle {
+    animation: sfl-particle 4.6s ease-in-out infinite;
+  }
+
+  /* 低性能设备：保留状态，不跑粒子与模糊 */
+  .budget-low .fx-particle,
+  .budget-reduced .fx-particle {
+    display: none;
+  }
+
+  .budget-low .track-glow {
+    filter: none;
+  }
+
+  .budget-low .track-flow,
+  .budget-low .orbit-spin,
+  .budget-low .orbit-spin-rev,
+  .budget-low .node-float,
+  .budget-low .sync-breathe,
+  .budget-reduced .track-flow,
+  .budget-reduced .orbit-spin,
+  .budget-reduced .orbit-spin-rev,
+  .budget-reduced .node-float,
+  .budget-reduced .sync-breathe {
+    animation: none;
+  }
+
+  .budget-reduced .track-shift {
+    transition: none;
+  }
+}
+
+@keyframes sfl-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+@keyframes sfl-sweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sfl-dot {
+  from {
+    opacity: 0;
+    transform: translate(var(--dot-x), var(--dot-y)) scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes sfl-pulse-soft {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes sfl-merge {
+  from {
+    opacity: 0;
+    transform: translateX(-16px) scaleX(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scaleX(1);
+  }
+}
+
+@keyframes sfl-merge-right {
+  from {
+    opacity: 0;
+    transform: translateX(16px) scaleX(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scaleX(1);
+  }
+}
+
+
+@keyframes sfl-float {
+  0%,
+  100% {
+    transform: translateY(-3px);
+  }
+  50% {
+    transform: translateY(3px);
+  }
+}
+
+@keyframes sfl-breathe {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes sfl-particle {
+  0%,
+  100% {
+    opacity: 0.12;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.55;
+    transform: translateY(-9px);
+  }
+}
+
+/* 用户系统设置里开了"减少动态效果"时，全部动画与视差一律关闭 */
+@media (prefers-reduced-motion: reduce) {
+  .radar-sweep,
+  .radar-dot,
+  .radar-pulse,
+  .animate-merge,
+  .animate-merge-right,
+  .animate-rise,
+  .animate-fade,
+  .animate-pop,
+  .skeleton-shimmer {
+    animation: none !important;
+  }
+
+  .orbit-spin,
+  .orbit-spin-rev,
+  .node-float,
+  .sync-breathe,
+  .fx-particle {
+    animation: none !important;
+  }
+
+  /* 关闭轨迹移动，但保留静态状态变化 */
+  .track-shift {
+    transition: none !important;
+  }
+
+  .snap-row {
+    scroll-behavior: auto;
+  }
+}
+
+/* 评委提示条（JudgeBanner）在文档流里占高：满屏页面按它的实测高度让位，
+   否则整页会比视口多出提示条那一截，出现整页滚动条。
+   提示条关闭时 --judge-banner-h 为 0，与原来的 100vh 行为完全一致。 */
+.min-h-screen {
+  min-height: calc(100vh - var(--judge-banner-h, 0px));
+}
+
+.h-screen {
+  height: calc(100vh - var(--judge-banner-h, 0px));
+}
+
+.h-\[100dvh\] {
+  height: calc(100dvh - var(--judge-banner-h, 0px));
+}
+
+/* ---------------------------------------------------------------
+   双人同行票：匹配成功页的主角
+   绿（用户轨迹）与蓝紫（候选轨迹）在票面里融合，汇合完成用同一套发光效果。
+   所有装饰动效在 prefers-reduced-motion 下关闭，只保留状态本身。
+---------------------------------------------------------------- */
+
+/* 票面：一层极淡的绿紫融合底纹 */
+.companion-ticket {
+  background-image:
+    linear-gradient(155deg, rgba(49, 245, 138, 0.07), transparent 44%),
+    linear-gradient(205deg, rgba(130, 92, 255, 0.09), transparent 48%);
+}
+
+/* 同频印章：旋转的描边章，只做辅助信息，不做大数字 */
+.ticket-stamp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border: 1px solid rgba(73, 214, 190, 0.55);
+  border-radius: 999px;
+  color: rgba(214, 255, 240, 0.88);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  background: rgba(6, 12, 16, 0.6);
+  transform: rotate(-11deg);
+  box-shadow: 0 0 12px rgba(49, 245, 138, 0.18);
+}
+
+/* 汇合完成：绿紫双色融合的同一套发光 */
+.merge-halo {
+  background: radial-gradient(
+    50% 50% at 50% 50%,
+    rgba(49, 245, 138, 0.38),
+    rgba(130, 92, 255, 0.26) 52%,
+    transparent 72%
+  );
+}
+
+.merge-node-pill {
+  border-color: rgba(73, 214, 190, 0.5);
+  background-image: linear-gradient(90deg, rgba(49, 245, 138, 0.16), rgba(130, 92, 255, 0.2));
+  box-shadow:
+    0 0 16px rgba(49, 245, 138, 0.16),
+    0 0 24px rgba(130, 92, 255, 0.18);
+}
+
+/* 候选端揭晓：匿名剪影与真人头像叠在一起，交叉过渡与闪光由 GSAP 驱动
+   （见 components/musicVisuals.tsx 的 DualTrackStage），这里只保留图层语义。 */
+.identity-layer {
+  will-change: opacity, transform;
+}
+
+/* 闪光只由 GSAP 那一条时间线驱动：同一属性再有 CSS animation 会双写，还会绕过失焦暂停 */
+.identity-flash {
+  opacity: 0;
+  background: radial-gradient(
+    50% 50% at 50% 50%,
+    rgba(49, 245, 138, 0.45),
+    rgba(130, 92, 255, 0.3) 56%,
+    transparent 74%
+  );
+}
+
+/* 页面切走/失焦时，仍走 CSS 的装饰动画也一起停（GSAP 由 lib/gsapSetup.ts 统一暂停） */
+html[data-motion-paused] .fx-particle,
+html[data-motion-paused] .node-float,
+html[data-motion-paused] .sync-breathe,
+html[data-motion-paused] .radar-sweep,
+html[data-motion-paused] .radar-dot,
+html[data-motion-paused] .radar-pulse,
+html[data-motion-paused] .orbit-spin,
+html[data-motion-paused] .orbit-spin-rev {
+  animation-play-state: paused;
+}
+
+/* 轨道位置由 React 按真实进度算，页面不可见时没必要把这段过渡跑完 */
+html[data-motion-paused] .track-shift {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* 减少动效：不做交叉过渡与闪光，直接显示揭晓完成状态 */
+  .identity-layer {
+    transition: none !important;
+  }
+
+  .identity-flash {
+    opacity: 0 !important;
+  }
+
+  .ticket-stamp {
+    transform: none;
+  }
+}

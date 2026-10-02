@@ -2,12 +2,15 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react'
 import {
   ApiError,
+  cancelInviteAgent,
   createRoomAgent,
   feedbackAgent,
+  fetchAgentSession,
   fetchMemoryCard,
   inviteAgent,
   peerConfirmAgent,
   resolveDataMode,
+  respondInvitation as requestRespondInvitation,
   setDemoScenario,
   submitReport,
 } from '../lib/api'
@@ -155,11 +158,15 @@ interface SessionContextValue {
   /** 非空表示 live 模式但后端没有可用大模型配置，页面据此展示「尚未配置大模型服务」。 */
   agentNotConfigured: string
   runAgent: (options?: { text?: string; intent?: ParsedIntent | null }) => Promise<AgentState | null>
-
+  /** 用户主动取消当前匹配：中止任务并回到可恢复的「还没有开始匹配」状态。 */
+  cancelAgent: () => void
   peerViewed: boolean
   /** 返回是否真的邀请成功；失败时会给出 toast，调用方不要假装成功 */
   invite: (candidateId: string) => Promise<boolean>
   peerConfirm: (accept: boolean) => Promise<boolean>
+  /** 对方视角：凭 inviteId 接受 / 拒绝；接受成功返回唯一房间，失败或拒绝返回 null。 */
+  respondInvitation: (inviteId: string, accept: boolean) => Promise<RoomState | null>
+  cancelInvite: (expired?: boolean) => Promise<boolean>
   createRoom: () => Promise<boolean>
   confirmAndCreateRoom: (candidateId: string) => Promise<boolean>
   roomError: string
@@ -271,6 +278,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void resolveDataMode().then(setDataMode)
   }, [])
 
+
   useEffect(
     () => () => {
       runController.current?.abort()
@@ -289,6 +297,33 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const update = useCallback((updater: (prev: PersistedState) => Partial<PersistedState>) => {
     setState((prev) => ({ ...prev, ...updater(prev) }))
   }, [])
+
+  // 发起方等待对方确认时，轮询后端会话：对方接受 / 拒绝 / 超时后本机才更新。
+  // 绝不本地臆造对方已确认，也绝不提前建房。
+  useEffect(() => {
+    const sessionId = state.agent?.sessionId
+    if (agentTransport !== 'backend' || !sessionId || state.agent?.pendingConfirmation.status !== 'awaiting_peer') return undefined
+    let cancelled = false
+    const timer = window.setInterval(() => {
+      void fetchAgentSession(sessionId)
+        .then((next) => {
+          if (cancelled) return
+          update((prev) => {
+            const current = prev.agent
+            if (!current || current.sessionId !== sessionId) return {}
+            if (next.pendingConfirmation.status === current.pendingConfirmation.status && (next.roomId ?? null) === (current.roomId ?? null)) return {}
+            return { agent: next, room: (next.room ?? null) as RoomState | null }
+          })
+        })
+        .catch(() => {
+          // 轮询失败不打扰用户，下一次再试
+        })
+    }, 2500)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [state.agent?.pendingConfirmation.status, state.agent?.sessionId, agentTransport, update])
 
   const pushToast = useCallback(
     (text: string, tone: ToastMessage['tone'] = 'default') => {
@@ -467,6 +502,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [demoCase, pushToast, scenario, state.concertId, state.parsedIntent, state.rawIntent, state.scopes, update],
   )
 
+  /** 用户主动取消当前匹配：中止任务并回到可恢复的「还没有开始匹配」状态。 */
+  const cancelAgent = useCallback(() => {
+    runController.current?.abort()
+    runController.current = null
+    activeRunId.current = null
+    setAgentStarting(false)
+    setAgentRunning(false)
+    setAgentError('')
+    setAgentRunId(null)
+    update(() => ({ agent: null }))
+  }, [update])
+
   // ------------------------------------------------------------ 双向确认
   const invite = useCallback(
     async (candidateId: string): Promise<boolean> => {
@@ -477,22 +524,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         update(() => ({ agent: next, peerViewed: false }))
         pushToast('已发出同频邀请，等待对方确认')
         schedule(() => update(() => ({ peerViewed: true })), 1400)
-        // Demo 里由定时器模拟"对方客户端确认"；真实产品由对方客户端触发。
-        schedule(() => {
-          void (async () => {
-            try {
-              const latest = await peerConfirmAgent(
-                { ...next, pendingConfirmation: { ...next.pendingConfirmation } },
-                true,
-                agentTransport,
-              )
-              update(() => ({ agent: latest }))
-              pushToast('对方已确认，可以进入临时房间了', 'success')
-            } catch (error) {
-              pushToast(messageOf(error), 'warn')
-            }
-          })()
-        }, 3600)
         return true
       } catch (error) {
         pushToast(messageOf(error), 'warn')
@@ -508,7 +539,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (!current) return false
       try {
         const next = await peerConfirmAgent(current, accept, agentTransport)
-        update(() => ({ agent: next }))
+        if (!accept) {
+          update(() => ({ agent: next, room: null }))
+          return true
+        }
+        const created = await createRoomAgent(next, agentTransport)
+        if (!created.room) return false
+        update(() => ({ agent: created.state, room: created.room, peerViewed: true }))
         return true
       } catch (error) {
         pushToast(messageOf(error), 'warn')
@@ -517,6 +554,42 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     },
     [agentTransport, pushToast, state.agent, update],
   )
+
+  const respondInvitation = useCallback(
+    async (inviteId: string, accept: boolean): Promise<RoomState | null> => {
+      try {
+        const next = await requestRespondInvitation(inviteId, accept, agentTransport)
+        if (!accept) {
+          pushToast('已婉拒这次邀请，不会创建同行房间')
+          return null
+        }
+        const created = (next.room ?? null) as RoomState | null
+        if (!next.roomId || !created) {
+          pushToast('对方已撤回或邀请已过期，本次没有创建房间', 'warn')
+          return null
+        }
+        update(() => ({ agent: next, room: created, peerViewed: true }))
+        pushToast('已接受同行邀请，房间已开启', 'success')
+        return created
+      } catch (error) {
+        pushToast(messageOf(error), 'warn')
+        return null
+      }
+    },
+    [agentTransport, pushToast, update],
+  )
+  const cancelInvite = useCallback(async (expired = false): Promise<boolean> => {
+    const current = state.agent
+    if (!current || current.pendingConfirmation.status !== 'awaiting_peer') return false
+    try {
+      const next = await cancelInviteAgent(current, expired, agentTransport)
+      update(() => ({ agent: next, room: null }))
+      return true
+    } catch (error) {
+      pushToast(messageOf(error), 'warn')
+      return false
+    }
+  }, [agentTransport, pushToast, state.agent, update])
 
   const createRoom = useCallback(async () => {
     const current = state.agent
@@ -541,16 +614,31 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const confirmAndCreateRoom = useCallback(async (candidateId: string) => {
     if (!state.agent) return false
+    setRoomError('')
     try {
       let next = state.agent
       if (next.pendingConfirmation.candidateId !== candidateId) next = await inviteAgent(next, candidateId, agentTransport)
       next = { ...next, pendingConfirmation: { ...next.pendingConfirmation, required: true, candidateId, proposerConfirmed: true, peerConfirmed: true, status: 'both_confirmed' } }
+      // 真实模式必须由后端建房：只有后端持久化的房间，消息接口和第二个浏览器上下文才看得到。
+      // 这里曾经只用 createRoomState 在本地造房间，导致房间页发消息 404、刷新后消息丢失。
+      if (agentTransport === 'backend') {
+        const { state: serverState, room } = await createRoomAgent(next, 'backend')
+        if (!room) {
+          setRoomError('双方尚未都确认，不能创建临时房间')
+          pushToast('双方尚未都确认，暂时不能进入房间', 'warn')
+          return false
+        }
+        update(() => ({ agent: serverState, room, peerViewed: true }))
+        return true
+      }
       const created = createRoomState(next)
       if (!created.room) return false
       update(() => ({ agent: created.state, room: created.room, peerViewed: true }))
       return true
     } catch (error) {
-      pushToast(messageOf(error), 'warn')
+      const message = messageOf(error)
+      setRoomError(message)
+      pushToast(message, 'warn')
       return false
     }
   }, [agentTransport, pushToast, state.agent, update])
@@ -725,9 +813,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       agentRunId,
       agentNotConfigured,
       runAgent,
+      cancelAgent,
       peerViewed: state.peerViewed,
       invite,
       peerConfirm,
+      respondInvitation,
+      cancelInvite,
       createRoom,
       confirmAndCreateRoom,
       roomError,
@@ -773,11 +864,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       memoryError,
       memoryLoading,
       peerConfirm,
+      respondInvitation,
+      cancelInvite,
       pushToast,
       report,
       resetAll,
       roomError,
       runAgent,
+      cancelAgent,
       saveParsedIntent,
       savePrefs,
       scenario,

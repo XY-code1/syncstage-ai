@@ -48,6 +48,8 @@ class Settings:
     # live = 只有检测到有效模型配置后才允许启用（见 ai_enabled）。
     agent_mode: str = os.getenv('AGENT_MODE', 'mock').strip().lower()
     ai_force_fallback: bool = os.getenv('AI_FORCE_FALLBACK', '').strip().lower() in {'1', 'true', 'yes'}
+    # 同行邀请的有效期（秒）：正式产品可配置；Demo 可以把 AGENT_INVITE_TTL_SECONDS 调短来演示超时分支。
+    agent_invite_ttl_seconds: int = int(os.getenv('AGENT_INVITE_TTL_SECONDS', '300'))
     openai_api_key: str = os.getenv('OPENAI_API_KEY', '')
     openai_base_url: str = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
     openai_model: str = os.getenv('OPENAI_MODEL', '')
@@ -63,6 +65,10 @@ class Settings:
     llm_model: str = os.getenv('LLM_MODEL', 'deepseek-flash').strip()
     llm_timeout_seconds: float = float(os.getenv('LLM_TIMEOUT_SECONDS', '20'))
     llm_api_key: str = os.getenv('LLM_API_KEY', '').strip() or os.getenv('DEEPSEEK_API_KEY', '').strip()
+    # 结构化 JSON 任务默认关闭「思考/推理」：推理 token 同样计入 max_tokens，
+    # 开启推理会让解析变慢，甚至预算被推理吃满而返回空正文。
+    # 若所用网关不支持该参数（返回 400），把 LLM_DISABLE_THINKING 设为 0 即可。
+    llm_disable_thinking: bool = os.getenv('LLM_DISABLE_THINKING', '1').strip().lower() in {'1', 'true', 'yes'}
 
     @property
     def db_path(self) -> Path:
@@ -169,6 +175,8 @@ class Settings:
             'baseUrl': self.llm_base_url,
             'timeoutSeconds': self.llm_timeout_seconds,
             'configured': self.llm_reason == 'ready',
+            # available：网关配置可用（Key + 模型齐备）；是否真的能调通由最小真实请求验证。
+            'available': self.llm_reason == 'ready',
             'reason': self.llm_reason,
             'keyConfigured': bool(self.llm_api_key.strip()),
             'liveMode': self.agent_mode == 'live',
@@ -186,6 +194,7 @@ class Settings:
             'provider': self.llm_provider,
             'llmModel': self.llm_model,
             'configured': self.llm_reason == 'ready',
+            'available': self.llm_reason == 'ready',
             'llm': self.llm_status(),
             'apiStyle': self.api_style,
             'baseUrl': self.openai_base_url,

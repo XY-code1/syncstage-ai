@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Avatar } from '../components/Avatar'
 import { Poster } from '../components/Poster'
-import { MockNotice, QQMusicBar } from '../components/QQMusicBar'
+import { QQMusicBar } from '../components/QQMusicBar'
 import { Button, Card, Skeleton, StateView } from '../components/ui'
 import {
   SparkleIcon,
@@ -146,8 +146,6 @@ export function ConcertDetailPage() {
                 </div>
               </div>
             </Card>
-
-            <MockNotice />
 
             {room ? (
               <Card className='border-brand-500/35 bg-brand-500/8'>

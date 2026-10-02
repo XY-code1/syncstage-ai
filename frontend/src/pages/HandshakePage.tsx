@@ -17,7 +17,7 @@ import { useConcertFlow } from '../store/concertFlow'
 export function HandshakePage() {
   const { concertId = '', candidateId = '' } = useParams()
   const navigate = useNavigate()
-  const { agent, invite, peerConfirm, confirmAndCreateRoom } = useSession()
+  const { agent, invite, peerConfirm, room } = useSession()
   const { flow, patchFlow } = useConcertFlow(concertId)
 
   const report = agent?.handshakeReports?.[candidateId]
@@ -36,7 +36,7 @@ export function HandshakePage() {
   const invitedThisCandidate = pending?.candidateId === candidateId && pendingStatus === 'awaiting_peer'
   const confirmed =
     flow.handshakeStatus === 'confirmed' ||
-    (pending?.candidateId === candidateId && (pendingStatus === 'both_confirmed' || pendingStatus === 'confirmed'))
+    (pending?.candidateId === candidateId && (pendingStatus === 'accepted' || pendingStatus === 'both_confirmed' || pendingStatus === 'confirmed'))
 
   const footer = (
     <div>
@@ -44,26 +44,15 @@ export function HandshakePage() {
         <Button
           full
           size='lg'
-          onClick={async () => {
-            const ok = await confirmAndCreateRoom(candidateId)
-            if (!ok) return
-            patchFlow({ handshakeStatus: 'confirmed', roomId: agent?.roomId ?? 'local-room' })
-            navigate(`/concert/${concertId}/room`)
-          }}
+          onClick={() => navigate(room ? `/concert/${concertId}/room` : '/sync', { replace: true })}
         >
-          创建临时群聊
+          进入临时群聊
         </Button>
       ) : invitedThisCandidate ? (
-        <Button
-          full
-          size='lg'
-          onClick={async () => {
-            const ok = await peerConfirm(true)
-            if (ok) patchFlow({ handshakeStatus: 'confirmed' })
-          }}
-        >
-          模拟对方确认
-        </Button>
+        <div className='grid grid-cols-2 gap-2'>
+          <Button variant='secondary' onClick={() => void peerConfirm(false)}>暂不同行</Button>
+          <Button onClick={async () => { if (await peerConfirm(true)) patchFlow({ handshakeStatus: 'confirmed' }) }}>接受同行</Button>
+        </div>
       ) : (
         <Button
           full

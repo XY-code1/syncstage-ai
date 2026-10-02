@@ -178,6 +178,7 @@ def build_provider() -> LLMProvider:
             model=settings.llm_model,
             base_url=settings.llm_base_url,
             timeout_seconds=settings.llm_timeout_seconds,
+            disable_thinking=settings.llm_disable_thinking,
         )
     raise LLMError(
         LLM_NOT_CONFIGURED,

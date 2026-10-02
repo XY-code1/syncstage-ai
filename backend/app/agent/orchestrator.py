@@ -20,10 +20,21 @@ from typing import Any
 from app.agent.scoring import CandidateFacts, build_facts
 from app.agent.social import SocialProfile, load_social_profile
 from app.agent.state import AgentState, ParsedIntent, ToolTraceRecord
+from app.config import settings
 from app.agent.tools import PIPELINE, TOOLS, ToolContext, ToolResult
 from app.integrations.base import TMEDataProvider, get_tme_provider
 
 SESSION_TTL_SECONDS = 60 * 60 * 6
+
+
+def invite_ttl_ms() -> int:
+    """邀请有效期（毫秒）：正式产品可配置，Demo 可调短 AGENT_INVITE_TTL_SECONDS 来演示超时分支。"""
+
+    return max(1, int(settings.agent_invite_ttl_seconds)) * 1000
+
+
+# 双向确认状态机：candidate -> awaiting_peer -> accepted / declined / expired / cancelled
+CONSENT_STATUSES = ('candidate', 'awaiting_peer', 'accepted', 'declined', 'expired', 'cancelled')
 
 # 评委演示模式的三个案例
 DEMO_CASES = ('normal', 'safety_no_match', 'ai_fallback')
@@ -33,7 +44,9 @@ class AgentOrchestrator:
     def __init__(self, provider: TMEDataProvider | None = None) -> None:
         self.provider = provider or get_tme_provider()
         self._sessions: dict[str, AgentState] = {}
-        self._lock = threading.Lock()
+        # inviteId -> sessionId：对方视角只凭 inviteId 就能确认/拒绝，不需要知道发起方的会话。
+        self._invites: dict[str, str] = {}
+        self._lock = threading.RLock()
 
     # ---------------------------------------------------------------- 会话
     def get_session(self, session_id: str) -> AgentState | None:
@@ -53,6 +66,9 @@ class AgentOrchestrator:
         stale = [key for key, value in self._sessions.items() if now - value.updated_at > SESSION_TTL_SECONDS]
         for key in stale:
             self._sessions.pop(key, None)
+            for invite_id, session_id in list(self._invites.items()):
+                if session_id == key:
+                    self._invites.pop(invite_id, None)
 
     # ---------------------------------------------------------------- 工具调用
     async def call_tool(self, ctx: ToolContext, name: str, **kwargs: Any) -> ToolResult:
@@ -253,44 +269,101 @@ class AgentOrchestrator:
         await self.call_tool(ctx, 'generate_grounded_reason', ranked=ranked)
 
         state.ranked_candidates = ranked
+        # 状态 1：已找到候选人，但双方都还没确认（只有 invite 才会进入 awaiting_peer）。
+        state.pending_confirmation = {
+            'required': True,
+            'status': 'candidate',
+            'inviteId': None,
+            'candidateId': None,  # candidate 阶段还没选定邀请对象，invite 时才写入
+            'proposerConfirmed': False,
+            'peerConfirmed': False,
+            'reason': '已找到候选人，双方都还没确认',
+            'nextAction': 'invite',
+            'createdAt': None,
+            'expiresAt': None,
+        }
         state.updated_at = time.time()
 
     # ---------------------------------------------------------------- 确认与房间
     async def invite(self, session_id: str, candidate_id: str) -> AgentState:
-        """发起方确认要邀请谁 —— 进入 pending_confirmation。"""
+        """状态 2：发起方发出邀请 —— 进入 awaiting_peer，此时绝对不能建房。"""
 
         state = self._require(session_id)
+        self._expire_if_needed(state)
+        with self._lock:
+            current = state.pending_confirmation or {}
+            if current.get('status') in ('accepted', 'confirmed'):
+                raise ValueError('这份邀请已经被接受，不能再重复发起')
+            now_ms = int(time.time() * 1000)
+            invite_id = 'inv-' + uuid.uuid4().hex[:12]
+            state.pending_confirmation = {
+                'required': True,
+                'status': 'awaiting_peer',
+                'inviteId': invite_id,
+                'candidateId': candidate_id,
+                'proposerConfirmed': True,
+                'peerConfirmed': False,
+                'reason': '需要双方都确认后才创建临时房间',
+                'nextAction': 'wait_peer',
+                'createdAt': now_ms,
+                'expiresAt': now_ms + invite_ttl_ms(),
+            }
+            self._invites[invite_id] = session_id
+            state.status = 'pending_confirmation'
+            state.updated_at = time.time()
         ctx = ToolContext(provider=self.provider, state=state)
         await self.call_tool(ctx, 'send_mutual_consent_invitation', candidate_id=candidate_id)
-        state.pending_confirmation = {
-            'required': True,
-            'status': 'awaiting_peer',
-            'candidateId': candidate_id,
-            'proposerConfirmed': True,
-            'peerConfirmed': False,
-            'reason': '需要双方都确认后才创建临时房间',
-            'nextAction': 'wait_peer',
-        }
-        state.status = 'pending_confirmation'
-        state.updated_at = time.time()
         return state
 
     async def peer_confirm(self, session_id: str, accept: bool = True) -> AgentState:
-        """Demo 中模拟"对方"的确认动作（真实产品里由对方客户端触发）。"""
+        """状态 3/4：对方确认。只有仍是 awaiting_peer 的邀请能确认；撤回、过期、已接受都拒绝。"""
 
         state = self._require(session_id)
-        pending = state.pending_confirmation or {}
-        if not pending.get('required') or not pending.get('proposerConfirmed'):
-            raise ValueError('还没有发起邀请，不能直接确认')
-        pending = {**pending, 'peerConfirmed': bool(accept), 'status': 'both_confirmed' if accept else 'declined'}
-        pending['nextAction'] = 'create_temporary_room' if accept else 'back_to_matches'
-        pending['reason'] = '双方都已确认，Agent 可以创建临时房间了' if accept else '对方暂时不方便，换一个人试试'
-        state.pending_confirmation = pending
-        state.updated_at = time.time()
+        with self._lock:
+            self._expire_if_needed(state)
+            pending = state.pending_confirmation or {}
+            if not pending.get('required') or not pending.get('proposerConfirmed'):
+                raise ValueError('还没有发起邀请，不能直接确认')
+            if pending.get('status') != 'awaiting_peer':
+                raise ValueError('这份邀请已失效，不能再确认')
+            pending = {**pending, 'peerConfirmed': bool(accept), 'status': 'accepted' if accept else 'declined'}
+            pending['nextAction'] = 'create_temporary_room' if accept else 'back_to_matches'
+            pending['reason'] = '双方都已确认，Agent 可以创建临时房间了' if accept else '对方暂时不方便，换一个人试试'
+            state.pending_confirmation = pending
+            state.updated_at = time.time()
+        return await self.create_room(session_id) if accept else state
+
+    async def cancel_invite(self, session_id: str, expired: bool = False) -> AgentState:
+        """状态 5/6：撤回或超时。发出邀请后、对方确认前可以撤回；已经 accepted 只能退出房间。"""
+
+        state = self._require(session_id)
+        with self._lock:
+            self._expire_if_needed(state)
+            pending = state.pending_confirmation or {}
+            if expired and pending.get('status') == 'expired':
+                # 已经超时：重复触发（例如前端倒计时兜底）不再报错。
+                return state
+            if pending.get('status') in ('accepted', 'confirmed'):
+                raise ValueError('双方已经确认，不能撤回邀请；如需结束请退出房间')
+            if pending.get('status') != 'awaiting_peer':
+                raise ValueError('只有等待对方确认的邀请可以撤回或过期')
+            state.pending_confirmation = {
+                **pending,
+                'status': 'expired' if expired else 'cancelled',
+                'peerConfirmed': False,
+                'nextAction': 'invite' if expired else 'back_to_matches',
+                'reason': '邀请暂未得到回应，本次匹配已结束。' if expired else '邀请已由发起人撤回',
+            }
+            state.room_id = None
+            state.room = {}
+            state.updated_at = time.time()
         return state
 
     async def create_room(self, session_id: str) -> AgentState:
         state = self._require(session_id)
+        # 幂等：双方几乎同时确认时只认已经建好的那一个房间（roomId 由 sessionId 决定 + INSERT OR IGNORE）。
+        if state.room_id and (state.pending_confirmation or {}).get('status') in ('accepted', 'confirmed'):
+            return state
         ctx = ToolContext(provider=self.provider, state=state)
         ctx.cache['event'] = self.provider.get_event_context(state.event_id)
         ctx.cache['group_members'] = list((state.proposed_group or {}).get('members') or [])
@@ -327,6 +400,94 @@ class AgentOrchestrator:
         )
         state.updated_at = time.time()
         return state
+
+    # ------------------------------------------------- 对方视角（跨浏览器 / 跨会话）
+    def _expire_if_needed(self, state: AgentState) -> AgentState:
+        """惰性过期：等待中的邀请一旦超过有效期就变成 expired，且永远不会建房。"""
+
+        pending = state.pending_confirmation or {}
+        if pending.get('status') != 'awaiting_peer':
+            return state
+        if int(pending.get('expiresAt') or 0) > int(time.time() * 1000):
+            return state
+        state.pending_confirmation = {
+            **pending,
+            'status': 'expired',
+            'peerConfirmed': False,
+            'nextAction': 'invite',
+            'reason': '邀请暂未得到回应，本次匹配已结束。',
+        }
+        state.updated_at = time.time()
+        return state
+
+    def _invitation_view(self, state: AgentState) -> dict[str, Any]:
+        """给对方看的邀请摘要：活动、共同曲目、匹配理由、公开集合点与有效期。"""
+
+        pending = state.pending_confirmation or {}
+        candidate_id = str(pending.get('candidateId') or '')
+        ranked = next((item for item in state.ranked_candidates if item.get('userId') == candidate_id), None) or {}
+        candidate = ranked.get('candidate') or {}
+        try:
+            event = self.provider.get_event_context(state.event_id)
+        except Exception:  # noqa: BLE001 - 邀请摘要缺演出信息也不能影响确认链路
+            event = None
+        meeting = dict(getattr(event, 'meeting_point', {}) or {})
+        proposer = load_social_profile(state.user_id)
+        from_name = (proposer.display_name if proposer else '') or ''
+        if not from_name or from_name == '你':
+            # 对方视角不能出现「你邀请你」这种自我指代；演示身份统一显示为 Demo访客。
+            from_name = 'Demo访客'
+        return {
+            'inviteId': pending.get('inviteId'),
+            'fromUserId': state.user_id,
+            'fromName': from_name,
+            'toUserId': candidate_id,
+            'toNickname': candidate.get('nickname') or '',
+            'eventId': state.event_id,
+            'concertTitle': getattr(event, 'title', '') or '',
+            'venue': getattr(event, 'venue', '') or '',
+            'meetingPoint': ' · '.join(part for part in (meeting.get('name', ''), meeting.get('time', '')) if part),
+            'safety': meeting.get('note') or '只在公开场合见面',
+            'sharedSongs': list(ranked.get('sharedSongs') or []),
+            'matchReason': ranked.get('matchReason') or '',
+            'score': ranked.get('score'),
+            'createdAt': pending.get('createdAt'),
+            'expiresAt': pending.get('expiresAt'),
+            'status': pending.get('status'),
+        }
+
+    def list_invitations(self, user_id: str, nickname: str = '') -> list[dict[str, Any]]:
+        """对方视角：列出「正在等待我确认」的同行邀请。只读，不建房、不调用模型。
+
+        - 默认按 candidateId == userId 精确匹配；
+        - Demo 双身份可以用 nickname 把演示替身（如「写歌的江离」）映射到真实候选人。
+        """
+
+        if not user_id and not nickname:
+            return []
+        items: list[dict[str, Any]] = []
+        with self._lock:
+            for state in list(self._sessions.values()):
+                self._expire_if_needed(state)
+                pending = state.pending_confirmation or {}
+                if pending.get('status') != 'awaiting_peer':
+                    continue
+                view = self._invitation_view(state)
+                if user_id and view.get('toUserId') == user_id:
+                    items.append(view)
+                elif nickname and view.get('toNickname') == nickname:
+                    items.append(view)
+        items.sort(key=lambda item: int(item.get('createdAt') or 0), reverse=True)
+        return items
+
+    async def respond_invitation(self, invite_id: str, accept: bool) -> AgentState:
+        """对方视角的确认入口：只凭 inviteId 接受或拒绝，不需要知道发起方会话。"""
+
+        with self._lock:
+            session_id = self._invites.get(invite_id)
+        if not session_id or session_id not in self._sessions:
+            raise KeyError('这份邀请不存在或已失效，请让发起方重新邀请')
+        return await self.peer_confirm(session_id, accept)
 
     async def feedback(self, session_id: str, rating: str, tags: list[str], comment: str) -> AgentState:
         state = self._require(session_id)

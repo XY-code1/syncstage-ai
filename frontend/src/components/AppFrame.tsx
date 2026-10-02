@@ -1,9 +1,13 @@
 import type { ReactNode } from 'react'
 import { useSession } from '../store/session'
+import { useVisualBudget } from '../lib/visualBudget'
 
 export function AppFrame({ children }: { children: ReactNode }) {
+  // 视觉预算：低端机 / prefers-reduced-motion 时在场景根节点挂预算类，
+  // 由 index.css 里的 .budget-low / .budget-reduced 关闭粒子、模糊与轨迹动画。
+  const { rootClassName } = useVisualBudget()
   return (
-    <div className='stage-surface min-h-screen w-full'>
+    <div className={'stage-surface min-h-screen w-full ' + rootClassName}>
       <div className='relative mx-auto flex min-h-screen w-full max-w-[390px] flex-col overflow-x-hidden bg-stage-950 shadow-[0_0_120px_-44px_rgba(49,194,124,0.38)] sm:border-x sm:border-white/8'>
         {children}
       </div>

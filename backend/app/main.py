@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.db import init_db
 from app.demo_data import DEMO_NOTICE
-from app.routers import agent, agent_run, ai, concerts, health, matching, safety
+from app.routers import agent, agent_run, ai, concerts, health, matching, rooms, safety
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s')
 
@@ -52,4 +52,6 @@ app.include_router(concerts.router)
 app.include_router(matching.router)
 app.include_router(ai.router)
 app.include_router(safety.router)
+# 临时同行房间的真人消息（后端持久化，供两个浏览器上下文互发）
+app.include_router(rooms.router)
 

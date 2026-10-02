@@ -1,223 +1,76 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TabHeader } from '../components/TabLayout'
+import { Avatar } from '../components/Avatar'
 import { MyProfileAvatar } from '../components/UserAvatar'
-import { CalendarIcon, ChevronRightIcon, ClockIcon, MapPinIcon, SparkleIcon, UsersIcon } from '../components/icons'
-import { Skeleton } from '../components/ui'
+import { Vinyl, WaveformBars } from '../components/musicVisuals'
+import { ChevronRightIcon, ShieldIcon, SparkleIcon, UsersIcon } from '../components/icons'
 import { fetchConcerts } from '../lib/api'
-import { SCOPE_LABELS } from '../lib/tmeMock'
+import { demoUsers } from '../data/demoData'
+import { useProfile } from '../store/profile'
 import { useSession } from '../store/session'
 import type { Concert } from '../types'
 
 export function HomePage() {
   const navigate = useNavigate()
-  const { agent, room, authorized, scopes } = useSession()
+  const { agent, room } = useSession()
+  const { profile } = useProfile()
   const [concerts, setConcerts] = useState<Concert[]>([])
-  const [loading, setLoading] = useState(true)
+  useEffect(() => { void fetchConcerts().then((items) => setConcerts(items.slice(0, 3))).catch(() => setConcerts([])) }, [])
+  const concert = concerts[0]
+  const candidate = demoUsers[0]
+  const resultReady = Boolean(agent?.rankedCandidates.length)
+  const confirmationStatus = agent?.pendingConfirmation.status
+  const statusLabel = confirmationStatus === 'awaiting_peer'
+    ? '等待对方确认'
+    : confirmationStatus === 'declined'
+      ? '对方暂未接受，可以继续寻找'
+      : confirmationStatus === 'expired'
+        ? '邀请已过期，可以重新匹配'
+        : confirmationStatus === 'accepted' || confirmationStatus === 'confirmed'
+          ? '双方已确认，可进入同行房间'
+          : '同频匹配结果已就绪'
+  const sharedSong = useMemo(() => agent?.rankedCandidates[0]?.sharedSongs[0] ?? concert?.hotSongs[0] ?? '夜航的信', [agent, concert])
+  const openPrimary = () => {
+    if (room) return navigate(`/concert/${room.concertId}/room`)
+    if (resultReady) return navigate(`/concert/${agent?.eventId ?? 'night-flight'}/reveal`)
+    navigate(concert ? `/concert/${concert.id}` : '/concerts')
+  }
 
-  const load = useCallback(async () => {
-    try {
-      setConcerts((await fetchConcerts()).slice(0, 2))
-    } catch {
-      setConcerts([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  return <div className='relative min-h-[calc(100dvh-72px)] overflow-hidden bg-[#020706] text-white'>
+    <img src='/concert-crowd-bg.png' alt='' className='pointer-events-none absolute inset-0 h-full w-full object-cover object-center opacity-70'/>
+    <div className='pointer-events-none absolute inset-0 bg-gradient-to-b from-[#020706]/35 via-[#020706]/25 to-[#020706]'/>
+    <header className='relative z-10 flex h-[68px] items-center gap-2 px-5 pt-2'>
+      <span className='flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-sm font-black text-[#04110b]'>♪</span>
+      <strong className='text-[18px]'>QQ音乐</strong><span className='text-white/35'>|</span><span className='font-semibold'>同频现场</span>
+      <span className='ml-auto'><MyProfileAvatar size={36}/></span>
+    </header>
 
-  useEffect(() => {
-    void load()
-  }, [load])
+    <main className='relative z-10 px-5 pb-28 pt-5'>
+      {room || resultReady ? <button type='button' onClick={openPrimary} className='mb-3 flex min-h-11 w-full items-center rounded-2xl border border-brand-400/25 bg-black/45 px-3 text-left backdrop-blur-md'>
+        <SparkleIcon className='mr-2 h-4 w-4 text-brand-300'/><span className='min-w-0 flex-1 truncate text-sm'>{room ? '临时同行房间进行中' : statusLabel}</span><ChevronRightIcon className='h-4 w-4 text-white/55'/>
+      </button> : null}
 
-  const hasPlan = Boolean(agent && agent.rankedCandidates.length > 0)
-  const primaryConcert = concerts[0]
-
-  return (
-    <div className='tab-page'>
-      <TabHeader
-        title='一起去现场'
-        subtitle='开场之前，先找到同频的人'
-        aura
-        right={<MyProfileAvatar size={32} />}
-      />
-
-      <div className='px-4 pt-4'>
-        {/* 当前状态：一个卡片讲清楚下一步，而不是把全部流程铺开 */}
-        {room ? (
-          <button
-            type='button'
-            onClick={() => navigate(`/concert/${room.concertId}/room`)}
-            className='soft-card glow-confirmed flex w-full items-center gap-3 p-3.5 text-left'
-          >
-            <span className='flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-500/12 text-brand-300'>
-              <UsersIcon className='h-5 w-5' />
-            </span>
-            <span className='min-w-0 flex-1'>
-              <span className='block text-[14px] font-semibold text-ink-100'>临时同频房间进行中</span>
-              <span className='mt-0.5 block truncate text-[12.5px] text-ink-400'>
-                {room.concertTitle} · {room.members.length} 位成员
-              </span>
-            </span>
-            <span className='flex h-9 shrink-0 items-center rounded-xl bg-brand-500 px-3.5 text-[13px] font-semibold text-stage-950'>
-              进入
-            </span>
-          </button>
-        ) : hasPlan ? (
-          <button
-            type='button'
-            onClick={() => navigate(`/concert/${agent?.eventId ?? 'night-flight'}/matches`)}
-            className='soft-card flex w-full items-center gap-3 p-3.5 text-left'
-          >
-            <span className='flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-500/12 text-brand-300'>
-              <SparkleIcon className='h-5 w-5' />
-            </span>
-            <span className='min-w-0 flex-1'>
-              <span className='block text-[14px] font-semibold text-ink-100'>同频匹配结果已就绪</span>
-              <span className='mt-0.5 block text-[12.5px] text-ink-400'>
-                {agent?.rankedCandidates.length} 位同频候选人 · Top Match {agent?.rankedCandidates[0]?.score}%
-              </span>
-            </span>
-            <ChevronRightIcon className='h-4 w-4 shrink-0 text-ink-400' />
-          </button>
-        ) : (
-          /* Agent 入口：一句话说明 + 一个绿色主按钮，不在首页解释完整流程 */
-          <div className='soft-card raised-card p-3.5'>
-            <div className='flex items-center gap-3'>
-              <span className='glow-agent flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-500/12 text-brand-300'>
-                <SparkleIcon className='h-5 w-5' />
-              </span>
-              <p className='min-w-0 flex-1 text-[14px] leading-relaxed text-ink-100'>
-                告诉 Agent 你想和怎样的人一起去现场
-              </p>
-            </div>
-            <button
-              type='button'
-              disabled={!primaryConcert}
-              onClick={() => navigate(primaryConcert ? `/concert/${primaryConcert.id}` : '/concerts')}
-              className='glow-cta mt-3 flex h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-brand-500 text-[14px] font-semibold text-stage-950 transition active:scale-[0.99] disabled:opacity-45'
-            >
-              <SparkleIcon className='h-4 w-4' />
-              找同频搭子
-            </button>
-            <p className='mt-2 text-center text-[12px] text-ink-400'>
-              {authorized
-                ? `音乐画像已授权 ${scopes.length} 项 · ${scopes.map((scope) => SCOPE_LABELS[scope]).slice(0, 2).join('、')}…`
-                : '音乐画像：未授权（第一次使用时授权）'}
-            </p>
-          </div>
-        )}
-
-        {/* 演出：一级页面只放最近两场，其余进二级演出列表 */}
-        <div className='mt-5 flex items-baseline justify-between'>
-          <h2 className='text-[15px] font-semibold text-ink-100'>正在匹配的演出</h2>
-          <button
-            type='button'
-            onClick={() => navigate('/concerts')}
-            className='flex h-11 min-w-11 items-center justify-end px-1 text-[13px] text-ink-400'
-          >
-            全部演出
-          </button>
+      <section className='text-center'>
+        <p className='text-sm tracking-[.22em] text-brand-200/80'>QQ音乐 · 一起去现场</p>
+        <h1 className='mx-auto mt-4 max-w-[330px] text-[36px] font-black leading-[1.12] tracking-[-.04em]'>开场前，<br/>先遇见<span className='text-brand-300'>同频的人</span></h1>
+        <div data-visual='dual-track' data-track-state='apart' data-track-progress='0' className='track-shift relative mx-auto mt-5 h-[245px] max-w-[350px]'>
+          <div className='absolute left-0 top-8 z-10'><Avatar name={profile.nickname || '你'} from='#46f69a' to='#0aa66b' src={profile.avatar} size={66} showRing/></div>
+          <div className='absolute right-0 top-8 z-10'><Avatar name={candidate.nickname} from={candidate.avatar.from} to={candidate.avatar.to} size={66} className='ring-2 ring-vibepurple-400/70 ring-offset-2 ring-offset-[#03100d]'/></div>
+          <div className='absolute left-[46px] top-[80px] w-[105px] -rotate-6'><WaveformBars bars={15} height={54} active accent='#31f58a'/></div>
+          <div className='absolute right-[46px] top-[80px] w-[105px] rotate-6'><WaveformBars bars={15} height={54} active accent='#8769ff'/></div>
+          <div className='absolute left-1/2 top-[62px] z-20 -translate-x-1/2 rounded-full border border-brand-300/60 p-2 shadow-[0_0_38px_rgba(49,245,138,.36)]'><Vinyl size={128} spin accent='#31f58a'/></div>
+          <div className='absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-brand-400/45 bg-black/55 px-4 py-2 text-sm backdrop-blur'>♪ 共同心动曲目 · <b className='text-brand-300'>{sharedSong}</b></div>
+          <span className='sr-only'>两条轨道尚未汇合</span>
         </div>
-
-        <div className='mt-2.5 flex flex-col gap-2.5'>
-          {loading
-            ? [0, 1].map((key) => <Skeleton key={key} className='h-[76px] w-full' />)
-            : concerts.map((concert) => (
-                <button
-                  key={concert.id}
-                  type='button'
-                  onClick={() => navigate(`/concert/${concert.id}`)}
-                  className='soft-card flex w-full items-center gap-3 p-2.5 text-left transition active:scale-[0.995]'
-                >
-                  <ConcertArt concert={concert} />
-                  <span className='min-w-0 flex-1'>
-                    <span className='block truncate text-[14px] font-semibold text-ink-100'>{concert.title}</span>
-                    <span className='mt-1.5 flex items-center gap-2.5 text-[12.5px] text-ink-400'>
-                      <span className='flex items-center gap-1'>
-                        <CalendarIcon className='h-3.5 w-3.5' />
-                        {concert.dateLabel.replace(/^.+(周.)/, '$1')}
-                      </span>
-                      <span className='flex items-center gap-1'>
-                        <MapPinIcon className='h-3.5 w-3.5' />
-                        {concert.city}
-                      </span>
-                    </span>
-                  </span>
-                  <span className='flex shrink-0 items-center gap-1.5'>
-                    <span className='rounded-pill border border-white/12 px-2 py-0.5 text-[11px] text-ink-400'>
-                      {concert.ticketStatus}
-                    </span>
-                    <ChevronRightIcon className='h-4 w-4 text-ink-400' />
-                  </span>
-                </button>
-              ))}
-        </div>
-
-        {/* 快捷入口：三个，不再堆卡片 */}
-        <div className='mt-4 grid grid-cols-3 gap-2.5'>
-          <QuickEntry label='同频广场' hint='看人优先' onClick={() => navigate('/sync')} />
-          <QuickEntry label='消息中心' hint='房间与通知' onClick={() => navigate('/messages')} />
-          <QuickEntry label='我的演出' hint='已确认计划' onClick={() => navigate('/me/shows')} />
-        </div>
-
-        <p className='mt-5 flex items-center justify-center gap-1.5 text-[11.5px] text-ink-400/80'>
-          <ClockIcon className='h-3 w-3' />
-          {authorized ? `本场授权 ${scopes.length} 项，活动结束后自动失效` : '参赛概念 Demo · 使用虚构数据'}
-        </p>
-      </div>
-    </div>
-  )
-}
-
-/**
- * 演出封面：用每场演出自己的配色做抽象音乐视觉（唱盘 + 声波 + 舞台光），
- * 不再用两块几乎一样的纯色方块。
- */
-function ConcertArt({ concert }: { concert: Concert }) {
-  const { poster } = concert
-  return (
-    <span
-      className='relative h-[58px] w-[58px] shrink-0 overflow-hidden rounded-[14px]'
-      style={{
-        backgroundImage:
-          `radial-gradient(120% 110% at 18% 4%, ${poster.accent} 0%, ${poster.accent}00 62%),` +
-          `linear-gradient(140deg, ${poster.from} 0%, ${poster.to} 100%)`,
-      }}
-      aria-hidden='true'
-    >
-      {/* 舞台灯光 */}
-      <span
-        className='absolute -left-5 -top-6 h-14 w-14 rounded-full opacity-70 blur-xl'
-        style={{ background: poster.accent }}
-      />
-      {/* 用演出自己的强调色拉开两张封面的差异（不是同一块纯色方块） */}
-      <span className='absolute inset-0 bg-gradient-to-t from-stage-950/45 to-transparent' />
-      {/* 声波 */}
-      <span className='absolute bottom-2 left-2 flex items-end gap-[2px]'>
-        {[5, 9, 13, 8, 4].map((height, index) => (
-          <span
-            key={index}
-            className='w-[2px] rounded-full'
-            style={{ height, background: poster.accent, opacity: 0.65 + (index % 3) * 0.12 }}
-          />
-        ))}
-      </span>
-      {/* 唱片 */}
-      <span className='absolute -bottom-3 -right-3 h-11 w-11 rounded-full bg-black/45 ring-1 ring-white/25'>
-        <span
-          className='absolute left-1/2 top-1/2 h-[6px] w-[6px] -translate-x-1/2 -translate-y-1/2 rounded-full'
-          style={{ background: poster.accent }}
-        />
-      </span>
-    </span>
-  )
-}
-
-function QuickEntry({ label, hint, onClick }: { label: string; hint: string; onClick: () => void }) {
-  return (
-    <button type='button' onClick={onClick} className='soft-card flex min-h-[64px] flex-col items-start gap-1 p-3 text-left'>
-      <span className='text-[13px] font-medium text-ink-100'>{label}</span>
-      <span className='text-[11.5px] text-ink-400'>{hint}</span>
-    </button>
-  )
+        <button type='button' onClick={openPrimary} className='mt-5 flex min-h-14 w-full items-center justify-center rounded-full bg-brand-400 px-5 text-[18px] font-black text-[#03110a] shadow-[0_10px_34px_rgba(49,245,138,.28)] active:scale-[.99]'>
+          {room ? '继续同行房间' : resultReady ? '查看同频结果' : '开始找同频搭子'} <span className='ml-3 text-2xl'>→</span>
+        </button>
+        <div className='mt-4 flex items-center justify-center gap-3 text-sm text-white/65'><span className='flex items-center gap-1'><UsersIcon className='h-4 w-4 text-brand-300'/>同场匹配</span><span className='text-white/20'>|</span><span>♡ 双方确认</span><span className='text-white/20'>|</span><span className='flex items-center gap-1'><ShieldIcon className='h-4 w-4'/>公开场合见面</span></div>
+      </section>
+      <section className='mt-8'>
+        <div className='mb-3 flex items-center justify-between'><h2 className='font-semibold'>近期演出</h2><button type='button' onClick={() => navigate('/concerts')} className='min-h-11 px-2 text-sm text-white/60'>查看全部</button></div>
+        <div className='flex gap-3 overflow-x-auto pb-2'>{concerts.map((item) => <button key={item.id} type='button' onClick={() => navigate(`/concert/${item.id}`)} className='min-h-[88px] w-[78%] shrink-0 rounded-2xl border border-white/10 bg-[#101615]/90 p-3 text-left'><span className='block font-semibold'>{item.title}</span><span className='mt-1 block text-sm text-white/55'>{item.artist} · {item.dateLabel} · {item.city}</span></button>)}</div>
+      </section>
+    </main>
+  </div>
 }

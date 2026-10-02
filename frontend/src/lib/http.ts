@@ -8,6 +8,7 @@ export interface ApiErrorOptions {
   status?: number | null
   upstreamStatus?: number | null
   detail?: string
+  requestId?: string
 }
 
 export class ApiError extends Error {
@@ -16,6 +17,8 @@ export class ApiError extends Error {
   status: number | null
   upstreamStatus: number | null
   detail: string
+  /** 后端透传的上游 request_id，只用于排查，绝不含密钥。 */
+  requestId: string
 
   constructor(message: string, code = 'UNKNOWN', options: ApiErrorOptions = {}) {
     super(message)
@@ -25,6 +28,7 @@ export class ApiError extends Error {
     this.status = options.status ?? null
     this.upstreamStatus = options.upstreamStatus ?? null
     this.detail = options.detail ?? ''
+    this.requestId = options.requestId ?? ''
   }
 
   /** 给用户看的一行错误说明：原因 + 怎么修 */
@@ -51,6 +55,7 @@ export interface AiStatus {
   provider?: string
   llmModel?: string
   configured?: boolean
+  available?: boolean
   llm?: {
     mode: string
     provider: string
@@ -58,6 +63,7 @@ export interface AiStatus {
     baseUrl: string
     timeoutSeconds: number
     configured: boolean
+    available?: boolean
     reason: string
     keyConfigured: boolean
     liveMode: boolean
@@ -92,12 +98,13 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       const payload = await response.json().catch(() => null)
       const detail: unknown = payload && typeof payload === 'object' ? (payload as { detail?: unknown }).detail : null
       if (detail && typeof detail === 'object') {
-        const info = detail as { code?: string; message?: string; hint?: string; upstreamStatus?: number; detail?: string }
+        const info = detail as { code?: string; message?: string; hint?: string; upstreamStatus?: number; detail?: string; requestId?: string }
         throw new ApiError(info.message || '大模型调用失败', info.code || 'LLM', {
           hint: info.hint,
           status: response.status,
           upstreamStatus: info.upstreamStatus ?? null,
           detail: info.detail,
+          requestId: info.requestId,
         })
       }
       const message = typeof detail === 'string' && detail ? detail : '后端返回了 ' + response.status

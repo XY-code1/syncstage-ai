@@ -22,6 +22,7 @@ from .errors import (
     LLM_BAD_REQUEST,
     LLM_BAD_RESPONSE,
     LLM_CONNECTION,
+    LLM_INSUFFICIENT_BALANCE,
     LLM_MODEL_NOT_FOUND,
     LLM_NOT_CONFIGURED,
     LLM_RATE_LIMITED,
@@ -36,8 +37,50 @@ logger = logging.getLogger('same_frequency.llm.deepseek')
 DEFAULT_BASE_URL = 'https://api.deepseek.com'
 DEFAULT_MODEL = 'deepseek-flash'
 
+# 单次 max_tokens 的上限：推理模型的推理过程也吃预算，扩预算重试时不会超过这个值。
+MAX_TOKEN_BUDGET = 8192
+
 # 测试注入点：单元测试用 httpx.MockTransport 替换真实网络，生产环境保持 None。
 TEST_TRANSPORT: httpx.AsyncBaseTransport | None = None
+
+# 429 里要区分「限流」与「余额不足」：余额问题重试无效，必须给出可执行的提示。
+_BALANCE_MARKERS = (
+    'insufficient balance',
+    'insufficient_quota',
+    'insufficient quota',
+    'account balance',
+    'balance is not enough',
+    '余额不足',
+    '欠费',
+)
+
+
+def _looks_like_balance(body: str) -> bool:
+    text = (body or '').lower()
+    return any(marker in text for marker in _BALANCE_MARKERS)
+
+
+def _request_id_of(response: httpx.Response) -> str:
+    # 上游请求号只用于排查，绝不包含密钥：先读 Header，再退回错误体。
+    for header in ('x-request-id', 'x-ds-trace-id', 'x-trace-id', 'request-id'):
+        value = (response.headers.get(header) or '').strip()
+        if value:
+            return value
+    try:
+        data = response.json()
+    except ValueError:
+        return ''
+    if not isinstance(data, dict):
+        return ''
+    error = data.get('error')
+    candidates: list[object] = []
+    if isinstance(error, dict):
+        candidates.extend([error.get('request_id'), error.get('requestId'), error.get('id')])
+    candidates.extend([data.get('request_id'), data.get('requestId'), data.get('id')])
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return ''
 
 
 class DeepSeekProvider(LLMProvider):
@@ -51,12 +94,16 @@ class DeepSeekProvider(LLMProvider):
         model: str = DEFAULT_MODEL,
         base_url: str = DEFAULT_BASE_URL,
         timeout_seconds: float = 20.0,
+        disable_thinking: bool = True,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.api_key = (api_key or '').strip()
         self.model = (model or '').strip()
         self.base_url = (base_url or DEFAULT_BASE_URL).strip() or DEFAULT_BASE_URL
         self.timeout_seconds = float(timeout_seconds or 20.0)
+        # 结构化抽取任务不需要长链推理：推理模型会把 token 预算耗在 reasoning_content 上，
+        # 导致正文为空或超时。默认请求网关闭推理，网关不支持时可关闭此开关。
+        self.disable_thinking = bool(disable_thinking)
         self._transport = transport
 
     # ---------------------------------------------------------------- 状态
@@ -104,6 +151,8 @@ class DeepSeekProvider(LLMProvider):
         temperature: float,
         max_tokens: int,
         json_mode: bool,
+        _budget_retried: bool = False,
+        _thinking_retried: bool = False,
     ) -> LLMChatResult:
         status = self.describe()
         if not status.configured:
@@ -116,6 +165,9 @@ class DeepSeekProvider(LLMProvider):
             'max_tokens': max_tokens,
             'stream': False,
         }
+        if self.disable_thinking:
+            # DeepSeek / 兼容网关的关闭推理写法；不认识该字段的网关会忽略它。
+            payload['thinking'] = {'type': 'disabled'}
         if json_mode:
             payload['response_format'] = {'type': 'json_object'}
 
@@ -144,6 +196,25 @@ class DeepSeekProvider(LLMProvider):
 
         elapsed = int((time.perf_counter() - started) * 1000)
         if response.status_code >= 400:
+            # 部分网关不认识 thinking 字段并直接 400：去掉该字段重试一次，不做无限重试。
+            if (
+                response.status_code in (400, 422)
+                and 'thinking' in payload
+                and not _thinking_retried
+            ):
+                logger.warning('[llm:deepseek] 网关不接受 thinking 字段（HTTP %s），去掉后重试一次', response.status_code)
+                self.disable_thinking = False
+                try:
+                    return await self._chat(
+                        messages,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        json_mode=json_mode,
+                        _budget_retried=_budget_retried,
+                        _thinking_retried=True,
+                    )
+                finally:
+                    self.disable_thinking = True
             raise self._error_from_response(response)
         try:
             data = response.json()
@@ -152,10 +223,33 @@ class DeepSeekProvider(LLMProvider):
 
         text = _content_of(data)
         if not text.strip():
-            raise LLMError(LLM_BAD_RESPONSE, '大模型没有返回任何正文', detail=redact(response.text)[:200])
+            # 推理模型（如 deepseek-flash）会先输出 reasoning_content，且推理 token 同样计入
+            # max_tokens；预算被推理占满时正文就是空的（finish_reason=length）。
+            # 这不是网络或鉴权问题，因此不刷新页面、不无限重试，只做一次有界扩容重试。
+            finish = str(((data.get('choices') or [{}])[0] or {}).get('finish_reason') or '')
+            if finish == 'length' and not _budget_retried and max_tokens < MAX_TOKEN_BUDGET:
+                bigger = min(max_tokens * 4, MAX_TOKEN_BUDGET)
+                logger.warning('[llm:deepseek] 正文为空且被 length 截断，用更大预算重试一次（%d -> %d）', max_tokens, bigger)
+                return await self._chat(
+                    messages,
+                    temperature=temperature,
+                    max_tokens=bigger,
+                    json_mode=json_mode,
+                    _budget_retried=True,
+                )
+            usage = data.get('usage') or {}
+            reasoning_tokens = int((usage.get('completion_tokens_details') or {}).get('reasoning_tokens') or 0)
+            hint = ''
+            if finish == 'length' or reasoning_tokens or _reasoning_of(data):
+                hint = (
+                    '该模型会先输出推理内容（reasoning_content），推理 token 也占 max_tokens 预算；'
+                    '正文为空通常是预算被推理占满，可换用非推理模型或调大预算'
+                )
+            raise LLMError(LLM_BAD_RESPONSE, '大模型没有返回任何正文', hint=hint, detail=redact(response.text)[:200])
         model = str(data.get('model') or self.model)
         choice = (data.get('choices') or [{}])[0] or {}
-        logger.info('[llm:deepseek] ← status=%s model=%s %dms', response.status_code, model, elapsed)
+        request_id = _request_id_of(response)
+        logger.info('[llm:deepseek] ← status=%s model=%s %dms requestId=%s', response.status_code, model, elapsed, request_id or '-')
         return LLMChatResult(
             text=text,
             model=model,
@@ -173,13 +267,21 @@ class DeepSeekProvider(LLMProvider):
         elif status == 404:
             code, hint = LLM_MODEL_NOT_FOUND, '检查 LLM_MODEL 是否在 ' + self.base_url + ' 上真实存在'
         elif status == 429:
-            code, hint = LLM_RATE_LIMITED, '上游限流，稍后重试'
+            if _looks_like_balance(body):
+                code = LLM_INSUFFICIENT_BALANCE
+                hint = (
+                    '请在 DeepSeek 控制台充值，或更换 backend/.env 里的 LLM_API_KEY 后重启后端；'
+                    '系统不会自动重试，也不会切换到 Demo / 模拟结果'
+                )
+            else:
+                code, hint = LLM_RATE_LIMITED, '上游限流，请稍后重试（不会自动重试，也不会切换 Demo 模式）'
         elif status in (400, 422):
             code, hint = LLM_BAD_REQUEST, '上游认为请求体不合法'
         else:
             code, hint = LLM_UPSTREAM_ERROR, ''
-        logger.warning('[llm:deepseek] ✗ HTTP %s -> %s', status, code)
-        return LLMError(code, hint=hint, upstream_status=status, detail=body)
+        request_id = _request_id_of(response)
+        logger.warning('[llm:deepseek] ✗ HTTP %s -> %s requestId=%s', status, code, request_id or '-')
+        return LLMError(code, hint=hint, upstream_status=status, detail=body, request_id=request_id)
 
     async def health_check(self) -> dict[str, Any]:
         started = time.perf_counter()
@@ -190,7 +292,7 @@ class DeepSeekProvider(LLMProvider):
                     {'role': 'user', 'content': '在吗'},
                 ],
                 temperature=0.0,
-                max_tokens=8,
+                max_tokens=256,
                 json_mode=False,
             )
         except LLMError as error:
@@ -211,7 +313,7 @@ class DeepSeekProvider(LLMProvider):
 
     # ---------------------------------------------------------------- 三个能力
     async def parse_intent(self, messages: list[dict[str, str]], schema: dict[str, Any]) -> LLMChatResult:
-        return await self._chat(messages, temperature=0.2, max_tokens=800, json_mode=True)
+        return await self._chat(messages, temperature=0.2, max_tokens=1024, json_mode=True)
 
     async def generate_explanation(self, context: dict[str, Any], schema: dict[str, Any]) -> LLMChatResult:
         from .prompts import build_explanation_messages
@@ -219,7 +321,7 @@ class DeepSeekProvider(LLMProvider):
         return await self._chat(
             build_explanation_messages(context, schema),
             temperature=0.4,
-            max_tokens=400,
+            max_tokens=1024,
             json_mode=True,
         )
 
@@ -229,9 +331,18 @@ class DeepSeekProvider(LLMProvider):
         return await self._chat(
             build_icebreaker_messages(context, schema),
             temperature=0.7,
-            max_tokens=600,
+            max_tokens=1024,
             json_mode=True,
         )
+
+
+def _reasoning_of(data: dict[str, Any]) -> str:
+    """读取推理模型特有的 reasoning_content（仅用于诊断提示，绝不当作正文返回）。"""
+
+    choice = (data.get('choices') or [{}])[0] or {}
+    message = choice.get('message') or {}
+    value = message.get('reasoning_content') or message.get('reasoning')
+    return '' if value is None else str(value)
 
 
 def _content_of(data: dict[str, Any]) -> str:

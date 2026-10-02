@@ -2,7 +2,6 @@ import { useNavigate } from 'react-router-dom'
 import { TabHeader } from '../components/TabLayout'
 import { UserAvatar } from '../components/UserAvatar'
 import {
-  BellIcon,
   ChevronRightIcon,
   EditIcon,
   LockIcon,
@@ -129,10 +128,6 @@ export function ProfilePage() {
           ))}
         </div>
 
-        <p className='mt-4 flex items-center justify-center gap-1.5 text-[11.5px] text-ink-400/80'>
-          <BellIcon className='h-3 w-3' />
-          参赛概念 Demo · 未接入真实 QQ 音乐账号
-        </p>
       </div>
     </div>
   )

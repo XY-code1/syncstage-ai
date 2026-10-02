@@ -1,0 +1,90 @@
+[
+  {
+    "label": "首页（未汇合）",
+    "dom": {
+      "nodes": 230,
+      "willChange": 4,
+      "blurFilter": 6
+    },
+    "moving": 5,
+    "changedWhileBlurred": 0,
+    "discreteWhileBlurred": 0,
+    "changedAfterFocus": 5,
+    "cssAnim": [
+      "sfl-particle :: span.fx-particle node-float absolute",
+      "sfl-particle :: span.fx-particle node-float absolute",
+      "sfl-particle :: span.fx-particle node-float absolute"
+    ],
+    "inlineMotion": {
+      "changed": 2,
+      "props": [
+        "stroke-dashoffset"
+      ],
+      "layout": []
+    },
+    "nodeGrowth": 0,
+    "frames": {
+      "frames": 151,
+      "fps": 60,
+      "p95": 16.8,
+      "long": 0
+    }
+  },
+  {
+    "label": "Agent 匹配中（正在汇合）",
+    "dom": {
+      "nodes": 231,
+      "willChange": 4,
+      "blurFilter": 8
+    },
+    "moving": 17,
+    "changedWhileBlurred": 0,
+    "discreteWhileBlurred": 1,
+    "changedAfterFocus": 6,
+    "cssAnim": [
+      "sfl-particle :: span.fx-particle node-float absolute",
+      "sfl-particle :: span.fx-particle node-float absolute",
+      "sfl-particle :: span.fx-particle node-float absolute"
+    ],
+    "inlineMotion": {
+      "changed": 8,
+      "props": [
+        "stroke-dashoffset",
+        "transform",
+        "opacity"
+      ],
+      "layout": []
+    },
+    "nodeGrowth": -4,
+    "frames": {
+      "frames": 151,
+      "fps": 60,
+      "p95": 16.8,
+      "long": 0
+    }
+  },
+  {
+    "label": "匹配揭晓（双人同行票）",
+    "dom": {
+      "nodes": 227,
+      "willChange": 6,
+      "blurFilter": 3
+    },
+    "moving": 3,
+    "changedWhileBlurred": 0,
+    "discreteWhileBlurred": 0,
+    "changedAfterFocus": 3,
+    "cssAnim": [
+      "sfl-breathe :: span.sync-breathe pointer-events-none absolute -inset"
+    ],
+    "inlineMotion": {
+      "changed": 2,
+      "props": [
+        "stroke-dashoffset"
+      ],
+      "layout": []
+    },
+    "nodeGrowth": 0,
+    "frames": null
+  }
+]

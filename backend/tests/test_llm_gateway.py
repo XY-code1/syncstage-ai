@@ -28,7 +28,10 @@ from app.services.llm import LLMError, LLMGateway, MockProvider, get_llm_gateway
 from app.services.llm import deepseek_provider as deepseek_module
 from app.services.llm.errors import (
     LLM_AUTH_FAILED,
+    LLM_BAD_RESPONSE,
+    LLM_INSUFFICIENT_BALANCE,
     LLM_NOT_CONFIGURED,
+    LLM_RATE_LIMITED,
     LLM_SCHEMA_INVALID,
     LLM_TIMEOUT,
 )
@@ -133,10 +136,93 @@ def test_mock_mode_never_touches_the_network() -> None:
     assert transport.seen == []
 
 
-def test_mock_provider_can_be_used_without_any_configuration() -> None:
-    gateway = get_llm_gateway()  # 本机 .env 是 AGENT_MODE=mock
+def test_mock_provider_can_be_used_without_any_configuration(monkeypatch) -> None:
+    # 不依赖本机 .env（开发者本地可能已经是 live）：mock 模式必须零配置可用。
+    import app.services.llm.gateway as gateway_module
+
+    # Settings 是 frozen dataclass，只能整体替换模块级引用
+    blank = Settings(agent_mode='mock', llm_api_key='', llm_model='')
+    monkeypatch.setattr(gateway_module, 'settings', blank)
+
+    gateway = get_llm_gateway()
     assert gateway.is_mock is True
     assert gateway.status()['configured'] is True
+    assert gateway.status()['mode'] == 'mock'
+
+
+def _truncated_response() -> httpx.Response:
+    """推理模型把 max_tokens 全花在 reasoning_content 上时的真实响应形状。"""
+
+    return httpx.Response(
+        200,
+        json={
+            'model': 'deepseek-flash',
+            'choices': [
+                {
+                    'message': {'role': 'assistant', 'content': '', 'reasoning_content': '……先想很久……'},
+                    'finish_reason': 'length',
+                }
+            ],
+            'usage': {'completion_tokens_details': {'reasoning_tokens': 1024}},
+        },
+    )
+
+
+def test_deepseek_disables_thinking_for_model_calls() -> None:
+    transport = Transport(lambda request: _chat_response(json.dumps(INTENT_PAYLOAD, ensure_ascii=False)))
+    gateway = _live_gateway(transport)
+
+    asyncio_run(gateway.parse_intent(build_intent_messages('想找个女生一起唱副歌', 'night-flight', PARSED_INTENT_SCHEMA)))
+
+    assert transport.bodies()[0]['thinking'] == {'type': 'disabled'}
+
+
+def test_deepseek_can_opt_out_of_disabling_thinking() -> None:
+    transport = Transport(lambda request: _chat_response(json.dumps(INTENT_PAYLOAD, ensure_ascii=False)))
+    settings = _live_settings()
+    provider = deepseek_module.DeepSeekProvider(
+        api_key=settings.llm_api_key,
+        model=settings.llm_model,
+        base_url=settings.llm_base_url,
+        timeout_seconds=settings.llm_timeout_seconds,
+        disable_thinking=False,
+        transport=transport.transport,
+    )
+    gateway = LLMGateway(provider, mode='live', timeout_seconds=settings.llm_timeout_seconds)
+
+    asyncio_run(gateway.parse_intent(build_intent_messages('想找个女生一起唱副歌', 'night-flight', PARSED_INTENT_SCHEMA)))
+
+    assert 'thinking' not in transport.bodies()[0]
+
+
+def test_truncated_empty_content_retries_once_with_bigger_budget() -> None:
+    budgets: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode('utf-8'))
+        budgets.append(int(body['max_tokens']))
+        if len(budgets) == 1:
+            return _truncated_response()
+        return _chat_response(json.dumps(INTENT_PAYLOAD, ensure_ascii=False))
+
+    gateway = _live_gateway(Transport(handler))
+    result = asyncio_run(gateway.parse_intent(build_intent_messages('想找个女生一起唱副歌', 'night-flight', PARSED_INTENT_SCHEMA)))
+
+    assert result['source'] == 'model'
+    assert len(budgets) == 2, '只允许一次有界扩容重试，不能无限重试'
+    assert budgets[1] > budgets[0]
+
+
+def test_persistently_empty_content_raises_clear_error_without_looping() -> None:
+    transport = Transport(lambda request: _truncated_response())
+    gateway = _live_gateway(transport)
+
+    with pytest.raises(LLMError) as info:
+        asyncio_run(gateway.parse_intent(build_intent_messages('想找个女生一起唱副歌', 'night-flight', PARSED_INTENT_SCHEMA)))
+
+    assert info.value.code == LLM_BAD_RESPONSE
+    assert '推理' in info.value.hint, '必须给出可执行的提示（推理 token 占满预算）'
+    assert len(transport.seen) == 2, '扩容失败后必须立即结束，不再发起请求'
 
 
 # ---------------------------------------------------------------- 2. live 走 Provider
@@ -203,6 +289,40 @@ def test_invalid_api_key_surfaces_as_auth_error(monkeypatch) -> None:
     assert response.status_code == 401
     assert response.json()['detail']['code'] == LLM_AUTH_FAILED
     assert response.json()['detail']['upstreamStatus'] == 401
+
+
+def test_insufficient_balance_reports_429_with_request_id_and_no_retry(monkeypatch) -> None:
+    body = {
+        'error': {
+            'message': 'Insufficient Balance',
+            'type': 'insufficient_quota',
+            'code': 'invalid_request_error',
+            'request_id': 'req-balance-0001',
+        }
+    }
+    transport = Transport(lambda request: httpx.Response(429, json=body, headers={'x-request-id': 'req-balance-0001'}))
+    monkeypatch.setattr(service_module, 'get_service', lambda: _service(_live_gateway(transport)))
+
+    with TestClient(app) as client:
+        response = client.post('/api/agent/parse-intent', json={'text': '找个人一起', 'eventId': 'night-flight'})
+
+    assert response.status_code == 429
+    detail = response.json()['detail']
+    assert detail['code'] == LLM_INSUFFICIENT_BALANCE
+    assert detail['upstreamStatus'] == 429
+    assert detail['requestId'] == 'req-balance-0001'
+    assert '余额' in (detail['message'] + detail['hint'])
+    assert len(transport.seen) == 1, '余额不足绝不自动重试，也不静默切换 mock'
+
+
+def test_plain_rate_limit_keeps_generic_429_without_retry() -> None:
+    transport = Transport(lambda request: httpx.Response(429, json={'error': {'message': 'Rate limit reached'}}))
+
+    with pytest.raises(LLMError) as info:
+        asyncio_run(_live_gateway(transport).parse_intent(build_intent_messages('hi', 'night-flight', PARSED_INTENT_SCHEMA)))
+
+    assert info.value.code == LLM_RATE_LIMITED
+    assert len(transport.seen) == 1
 
 
 def test_timeout_ends_immediately(monkeypatch) -> None:
@@ -287,7 +407,9 @@ def test_ai_status_reports_mode_provider_model_and_hides_key(monkeypatch) -> Non
     assert payload['llmModel'] == 'deepseek-flash'
     assert payload['llm']['model'] == 'deepseek-flash'
     assert payload['configured'] is True
+    assert payload['available'] is True
     assert payload['llm']['keyConfigured'] is True
+    assert payload['llm']['available'] is True
     assert KEY not in json.dumps(payload, ensure_ascii=False)
 
 

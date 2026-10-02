@@ -1,0 +1,448 @@
+{
+  "runAt": "2026-10-02T07:13:07.549Z",
+  "base": "http://127.0.0.1:5173",
+  "api": "http://127.0.0.1:8020",
+  "status": {
+    "agentMode": "live",
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "configured": true,
+    "liveMode": true,
+    "enabled": true,
+    "reason": "ready"
+  },
+  "apiCalls": [
+    {
+      "url": "http://127.0.0.1:8020/api/health",
+      "method": "GET",
+      "status": 200,
+      "ms": 4
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/ai/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 4
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/health",
+      "method": "GET",
+      "status": 200,
+      "ms": 5
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/ai/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 4
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/health",
+      "method": "GET",
+      "status": 200,
+      "ms": 11
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/health",
+      "method": "GET",
+      "status": 200,
+      "ms": 12
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/concerts",
+      "method": "GET",
+      "status": 200,
+      "ms": 10
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/concerts",
+      "method": "GET",
+      "status": 200,
+      "ms": 3
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/concerts/night-flight",
+      "method": "GET",
+      "status": 200,
+      "ms": 4
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/concerts/night-flight",
+      "method": "GET",
+      "status": 200,
+      "ms": 8
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/ai/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 2
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/agent/parse-intent",
+      "method": "OPTIONS",
+      "status": 200,
+      "ms": 1
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/agent/parse-intent",
+      "method": "POST",
+      "status": 200,
+      "ms": 1898
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/ai/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 5
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/agent/run",
+      "method": "OPTIONS",
+      "status": 200,
+      "ms": 1
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/agent/run",
+      "method": "POST",
+      "status": 200,
+      "ms": 8694
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/agent/sessions/run-7a8a2b63-4031-47bd-a391-854fd4589996/invite",
+      "method": "OPTIONS",
+      "status": 200,
+      "ms": 1
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/agent/sessions/run-7a8a2b63-4031-47bd-a391-854fd4589996/invite",
+      "method": "POST",
+      "status": 200,
+      "ms": 4
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/agent/sessions/run-7a8a2b63-4031-47bd-a391-854fd4589996/peer-confirm",
+      "method": "OPTIONS",
+      "status": 200,
+      "ms": 1
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/agent/sessions/run-7a8a2b63-4031-47bd-a391-854fd4589996/peer-confirm",
+      "method": "POST",
+      "status": 200,
+      "ms": 6
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/agent/sessions/run-7a8a2b63-4031-47bd-a391-854fd4589996/room",
+      "method": "POST",
+      "status": 200,
+      "ms": 11
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/ai/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 15
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/health",
+      "method": "GET",
+      "status": 200,
+      "ms": 15
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/ai/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 15
+    },
+    {
+      "url": "http://127.0.0.1:8020/api/health",
+      "method": "GET",
+      "status": 200,
+      "ms": 14
+    }
+  ],
+  "notes": [
+    "AI 状态：agentMode=live provider=deepseek model=deepseek-flash configured=true liveMode=true enabled=true reason=ready",
+    "开始匹配按钮：未出现（确认页点击「就按这个找」后会自动开始运行）",
+    "消息气泡数量：发送前 0，等待 4.5s 后 0"
+  ],
+  "rows": [
+    {
+      "step": "第0步 /api/ai/status provider=deepseek",
+      "ok": true,
+      "note": "provider=deepseek"
+    },
+    {
+      "step": "第0步 /api/ai/status configured=true（Key 已配置，未打印）",
+      "ok": true,
+      "note": "configured=true"
+    },
+    {
+      "step": "第0步 live 可用（enabled=true / liveMode=true，对应 available）",
+      "ok": true,
+      "note": "reason=ready"
+    },
+    {
+      "step": "第0步 已清空旧存储，当前不是 Demo 模拟 Agent",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第1步 首页加载完成",
+      "ok": true,
+      "note": "#/"
+    },
+    {
+      "step": "第1步 选择演出：点击「夜航计划」卡片",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第1步 进入演出详情 /concert/night-flight",
+      "ok": true,
+      "note": "#/concert/night-flight"
+    },
+    {
+      "step": "第2步 进入音乐数据授权",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第2步 全部授权并继续",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第2步 进入需求输入页（已授权画像）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第2步 输入自然语言同行需求",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第2步 提交给 Agent 结构化理解",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第2步 真实模型解析出四项结构化需求（音乐暗号/同行方式/现场氛围/安全边界）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第2步 确认页展示结构化字段",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第3步 确认需求并进入配对",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第3步 进入配对进度页",
+      "ok": true,
+      "note": "#/concert/night-flight/running"
+    },
+    {
+      "step": "第3步 运行模式徽标为真实模型 Agent",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第3步 一级界面没有 fallback / 回退字样",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第3步 真实 Agent 跑完并汇合到揭晓页",
+      "ok": true,
+      "note": "#/concert/night-flight/reveal"
+    },
+    {
+      "step": "第3步 落在 /concert/night-flight/reveal",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第3步 揭晓页展示真实综合匹配度",
+      "ok": true,
+      "note": "81%"
+    },
+    {
+      "step": "第3步 揭晓理由来自真实模型，不是规则回退",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第4步 打开匹配依据（同行票根）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第4步 票根可展开",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第4步 「换一位」可点击",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第4步 「换一位」真的切换候选人",
+      "ok": true,
+      "note": "末班地铁乘客 → 写歌的江离"
+    },
+    {
+      "step": "第4步 「暂不同行」可点击",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第4步 拒绝理由只影响下一轮，不通知对方",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第4步 提交拒绝理由并看下一位",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第4步 拒绝后自动切到下一位",
+      "ok": true,
+      "note": "写歌的江离 → 末班地铁乘客"
+    },
+    {
+      "step": "第5步 发出同行邀请",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第5步 邀请后先等待对方确认（不直接建房间）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第5步 第二用户状态机（Demo 定时器，真实调用 peer-confirm 接口）完成确认",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第5步 双方确认后才出现进入房间入口",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第5步 进入同行房间",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第5步 房间是消息模块里的群聊",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第5步 路由落在 /concert/night-flight/room",
+      "ok": true,
+      "note": "#/concert/night-flight/room"
+    },
+    {
+      "step": "第6步 在房间里输入真人消息",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第6步 发送真人消息",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第6步 我的消息进入聊天",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第6步 没有自动出现「模拟联系人」消息",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第6步 没有 AI 冒充对方的自动回复失败态",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第7步 刷新后房间仍存在",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第7步 刷新后聊天记录仍恢复",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第7步 刷新后匹配结果仍可恢复（揭晓页）",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第7步 刷新后匹配度仍展示",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第8步 打开消息页",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第8步 从消息列表重新进入同行房间",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第8步 重新进入后聊天记录保持",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第9步 打开房间设置",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第9步 设置里有「退出同行」",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第9步 退出有二次确认",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第9步 确认退出同行",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第9步 退出后给出明确反馈",
+      "ok": true,
+      "note": ""
+    },
+    {
+      "step": "第9步 退出后回到消息列表",
+      "ok": true,
+      "note": "#/messages"
+    }
+  ]
+}

@@ -226,7 +226,7 @@ class AgentState:
             'evidence': self.evidence,
             'pendingConfirmation': self.pending_confirmation,
             'roomId': self.room_id,
-            'room': self.room,
+            'room': self.room or None,
             'status': self.status,
             'error': self.error,
             'authorizedScopes': self.authorized_scopes,

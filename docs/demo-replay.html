@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>同频现场 · 演示链路回放（开始同频 → 发出同行邀请）</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: #07090c; color: #e6ecf2;
+         font: 14px/1.6 system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+         display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 28px 16px 48px; }
+  h1 { font-size: 17px; font-weight: 600; margin: 0; }
+  p.note { margin: 0; max-width: 720px; text-align: center; color: #8b98a5; font-size: 12.5px; }
+  .stage { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+  .screen { position: relative; width: 390px; height: 844px; border-radius: 26px; overflow: hidden;
+            border: 1px solid rgba(255,255,255,.12); background: #0b0f14;
+            box-shadow: 0 30px 80px -30px rgba(49,245,138,.35); }
+  .screen img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .side { width: 300px; display: flex; flex-direction: column; gap: 12px; }
+  button { font: inherit; color: inherit; background: #141a21; border: 1px solid rgba(255,255,255,.14);
+           border-radius: 12px; padding: 9px 14px; cursor: pointer; }
+  button.primary { background: linear-gradient(90deg,#31f58a,#61c8ff); color: #06231a; border: 0; font-weight: 600; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  input[type=range] { width: 100%; accent-color: #31f58a; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px;
+           border: 1px solid rgba(255,255,255,.14); color: #9fb0c0; }
+  .caption { min-height: 44px; font-size: 13px; color: #b9c6d2; }
+  ol { margin: 0; padding-left: 18px; color: #7f8d9b; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>同频现场 · 演示链路回放</h1>
+<p class="note">开始同频 → 演出详情 → 画像授权 → 描述同行需求 → 四项摘要确认 → 双轨动态匹配 → 同频汇合 → 同行票根 → 暂不同行 / 换一位 → 发出同行邀请 → 双方确认。</p>
+<div class="stage">
+  <div class="screen"><img id="shot" alt="演示帧" src="demo-frames/frame-000.jpg" /></div>
+  <div class="side">
+    <div class="badge" id="counter">第 1 / 45 帧</div>
+    <div class="caption" id="caption"></div>
+    <input id="scrub" type="range" min="0" max="44" value="0" step="1" />
+    <div class="row">
+      <button class="primary" id="toggle">暂停</button>
+      <button id="restart">重播</button>
+    </div>
+    <ol>
+      <li>首页两条轨道尚未汇合（约 0:00）</li>
+      <li>匹配中候选头像从四周靠近（约 0:12）</li>
+      <li>同频汇合：两条声波在共同歌曲封面汇合（约 0:18）</li>
+      <li>同行票根展开（约 0:22）</li>
+      <li>换一位 / 暂不同行（约 0:27）</li>
+      <li>发出同行邀请 → 双方确认（约 0:33）</li>
+    </ol>
+    <p class="note" style="text-align:left">录制方式：CDP 逐帧抓取（420ms/帧，390×844），未做任何后期拼接。本机没有 ffmpeg，因此以逐帧回放替代 mp4。</p>
+  </div>
+</div>
+<script>
+  const frames = [
+    'frame-000.jpg',
+    'frame-001.jpg',
+    'frame-002.jpg',
+    'frame-003.jpg',
+    'frame-004.jpg',
+    'frame-005.jpg',
+    'frame-006.jpg',
+    'frame-007.jpg',
+    'frame-008.jpg',
+    'frame-009.jpg',
+    'frame-010.jpg',
+    'frame-011.jpg',
+    'frame-012.jpg',
+    'frame-013.jpg',
+    'frame-014.jpg',
+    'frame-015.jpg',
+    'frame-016.jpg',
+    'frame-017.jpg',
+    'frame-018.jpg',
+    'frame-019.jpg',
+    'frame-020.jpg',
+    'frame-021.jpg',
+    'frame-022.jpg',
+    'frame-023.jpg',
+    'frame-024.jpg',
+    'frame-025.jpg',
+    'frame-026.jpg',
+    'frame-027.jpg',
+    'frame-028.jpg',
+    'frame-029.jpg',
+    'frame-030.jpg',
+    'frame-031.jpg',
+    'frame-032.jpg',
+    'frame-033.jpg',
+    'frame-034.jpg',
+    'frame-035.jpg',
+    'frame-036.jpg',
+    'frame-037.jpg',
+    'frame-038.jpg',
+    'frame-039.jpg',
+    'frame-040.jpg',
+    'frame-041.jpg',
+    'frame-042.jpg',
+    'frame-043.jpg',
+    'frame-044.jpg',
+  ]
+  const marks = [
+    [0, '首页：两条轨道尚未汇合'],
+    [11, '四项摘要确认 / 双轨匹配开始'],
+    [14, '匹配中：候选头像从四周靠近'],
+    [18, '同频汇合：两条声波在共同歌曲封面汇合'],
+    [22, '同行票根'],
+    [27, '换一位：切到下一位候选人'],
+    [28, '暂不同行：只记录理由，不通知对方'],
+    [33, '发出同行邀请：等待对方确认'],
+    [42, '双方确认：可以进入同行房间'],
+  ]
+  const shot = document.getElementById('shot')
+  const scrub = document.getElementById('scrub')
+  const counter = document.getElementById('counter')
+  const caption = document.getElementById('caption')
+  const toggle = document.getElementById('toggle')
+  let index = 0
+  let playing = true
+  let timer = null
+
+  function render() {
+    shot.src = 'demo-frames/' + frames[index]
+    scrub.value = String(index)
+    counter.textContent = '第 ' + (index + 1) + ' / ' + frames.length + ' 帧'
+    const hit = [...marks].reverse().find((mark) => mark[0] <= index)
+    caption.textContent = hit ? hit[1] : ''
+  }
+  function tick() {
+    if (!playing) return
+    index = index + 1 >= frames.length ? 0 : index + 1
+    render()
+  }
+  function start() { clearInterval(timer); timer = setInterval(tick, 420) }
+  function stop() { clearInterval(timer); timer = null }
+  toggle.addEventListener('click', () => {
+    playing = !playing
+    toggle.textContent = playing ? '暂停' : '播放'
+    if (playing) start(); else stop()
+  })
+  document.getElementById('restart').addEventListener('click', () => {
+    index = 0; render(); playing = true; toggle.textContent = '暂停'; start()
+  })
+  scrub.addEventListener('input', () => {
+    index = Number(scrub.value) || 0; render()
+  })
+  render()
+  start()
+</script>
+</body>
+</html>

@@ -327,3 +327,51 @@ export function LoaderIcon({ className = base }: IconProps) {
     </svg>
   )
 }
+
+export function MoreIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'>
+      <circle cx='5.5' cy='12' r='1.7' />
+      <circle cx='12' cy='12' r='1.7' />
+      <circle cx='18.5' cy='12' r='1.7' />
+    </svg>
+  )
+}
+
+export function FlagIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+      <path d='M6 21V4.5M6 5h11l-1.7 3.6L17 12H6' />
+    </svg>
+  )
+}
+
+/** 暂不同行 / 跳过：圆圈里一条横线 */
+export function BanIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' aria-hidden='true'>
+      <circle cx='12' cy='12' r='8.2' />
+      <path d='M8.2 12h7.6' />
+    </svg>
+  )
+}
+
+/** 唱片：外圈纹路 + 中心孔，用于匹配雷达与结果页 */
+export function DiscIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.6' aria-hidden='true'>
+      <circle cx='12' cy='12' r='8.6' />
+      <circle cx='12' cy='12' r='5.4' opacity='0.6' />
+      <circle cx='12' cy='12' r='1.7' fill='currentColor' stroke='none' />
+    </svg>
+  )
+}
+
+/** 声波：三根高低不同的竖条 */
+export function WaveIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.8' strokeLinecap='round' aria-hidden='true'>
+      <path d='M5 10v4M9.7 6.5v11M14.3 9v6M19 7.5v9' />
+    </svg>
+  )
+}

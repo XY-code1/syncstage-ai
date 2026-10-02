@@ -14,6 +14,7 @@ import { EditProfilePage } from './pages/EditProfilePage'
 import { HandshakePage } from './pages/HandshakePage'
 import { HomePage } from './pages/HomePage'
 import { IntentPage } from './pages/IntentPage'
+import { MatchRevealPage } from './pages/MatchRevealPage'
 import { MatchResultsPage } from './pages/MatchResultsPage'
 import { MessagesPage } from './pages/MessagesPage'
 import { MusicAuthPage } from './pages/MusicAuthPage'
@@ -64,12 +65,15 @@ export default function App() {
               <Route path='/concert/:concertId/authorize' element={<MusicAuthPage />} />
               <Route path='/concert/:concertId/task' element={<IntentPage />} />
               <Route path='/concert/:concertId/running' element={<AgentProgressPage />} />
+              <Route path='/concert/:concertId/reveal' element={<MatchRevealPage />} />
               <Route path='/concert/:concertId/trace' element={<AgentTracePage />} />
               <Route path='/concert/:concertId/agent' element={<Navigate to='running' replace />} />
               <Route path='/concert/:concertId/matches' element={<MatchResultsPage />} />
               <Route path='/concert/:concertId/matches/:candidateId' element={<CandidateDetailPage />} />
               <Route path='/concert/:concertId/handshake/:candidateId' element={<HandshakePage />} />
               <Route path='/concert/:concertId/room' element={<RoomPage />} />
+              {/* 第二个浏览器上下文凭 roomId 直接进入同一房间（双人真人聊天验证用） */}
+              <Route path='/room/:roomId' element={<RoomPage />} />
               <Route path='/showcase' element={<ShowcasePage />} />
               <Route path='*' element={<Navigate to='/' replace />} />
             </Routes>

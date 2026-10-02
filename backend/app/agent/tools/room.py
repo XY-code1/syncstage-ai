@@ -34,10 +34,13 @@ def run(
             status='error',
         )
     if not (proposer_confirmed and peer_confirmed):
-        ctx.state.pending_confirmation = {
-            **pending,
-            'status': 'awaiting_peer' if proposer_confirmed else 'awaiting_user',
-        }
+        # 只把「仍在等待」的状态压回等待态；declined / expired / cancelled 是终态，
+        # 任何一次误触建房都不能把它们复活成 awaiting_peer。
+        terminal = ('declined', 'expired', 'cancelled')
+        next_status = pending.get('status') if pending.get('status') in terminal else (
+            'awaiting_peer' if proposer_confirmed else 'awaiting_user'
+        )
+        ctx.state.pending_confirmation = {**pending, 'status': next_status}
         return ToolResult(
             payload={'status': 'awaiting_confirmation'},
             input_summary='proposer_confirmed=' + str(proposer_confirmed) + '，peer_confirmed=' + str(peer_confirmed),
@@ -88,7 +91,8 @@ def run(
             }
         )
 
-    room_id = 'room-' + ctx.state.session_id[:8] + '-' + str(int(time.time()))[-5:]
+    # sessionId 决定 roomId；重复/并发确认只会命中同一主键。
+    room_id = 'room-' + ctx.state.session_id[:12]
     payload = {
         'roomId': room_id,
         'concertId': ctx.state.event_id,
@@ -107,7 +111,7 @@ def run(
     ctx.state.room = saved
     ctx.state.error = ''
     ctx.state.status = 'room_created'
-    ctx.state.pending_confirmation = {**pending, 'status': 'confirmed'}
+    ctx.state.pending_confirmation = {**pending, 'status': 'accepted'}
 
     return ToolResult(
         payload=saved,

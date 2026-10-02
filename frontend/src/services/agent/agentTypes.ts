@@ -31,6 +31,13 @@ export class AgentNotConfiguredError extends Error {
 /** 一次 Agent 任务的整体预算：10 秒内必须结束，否则进入 error 状态且不自动重试。 */
 export const AGENT_RUN_TIMEOUT_MS = 10_000
 
+/**
+ * live 模式下整体预算放宽到 45 秒：真实模型要跑多次往返（解析 / 3 条理由 / 破冰），
+ * 后端已并行执行，但现场网络仍然可能明显慢于 10 秒。
+ * 这依然是有界预算：超时立刻进入 error，不自动重试、不无限等待。
+ */
+export const AGENT_LIVE_RUN_TIMEOUT_MS = 45_000
+
 /** 运行被取消（组件卸载 / 用户重新运行）时抛出。 */
 export class AgentRunAbortedError extends Error {
   constructor(message = '本次运行已取消') {
