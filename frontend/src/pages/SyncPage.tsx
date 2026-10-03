@@ -15,7 +15,7 @@ import type { ScoredCandidate } from '../types'
 export function SyncPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { agent, room, concertId, selectConcert, scopes, agentMode, respondInvitation } = useSession()
+  const { agent, room, concertId, selectConcert, scopes, agentMode, respondInvitation, matchResumable, startNewMatch, authorized } = useSession()
   const [focusId, setFocusId] = useState(concertId)
   const [detail, setDetail] = useState<ScoredCandidate | null>(null)
 
@@ -77,7 +77,7 @@ export function SyncPage() {
 
   const ongoing = room
     ? { label: '临时同频房间', title: room.concertTitle, hint: `${room.members.length} 位成员 · 已确认 ${room.members.filter((m) => m.confirmed).length}/${room.members.length}`, to: `/concert/${room.concertId}/room` }
-    : agent && agent.rankedCandidates.length > 0
+    : agent && matchResumable
       ? { label: agent.pendingConfirmation.status === 'awaiting_peer' ? '等待对方确认' : agent.pendingConfirmation.status === 'declined' ? '对方暂未接受' : agent.pendingConfirmation.status === 'expired' ? '邀请已过期' : '同频匹配结果已就绪', title: `Top Match · ${agent.rankedCandidates[0].candidate.nickname}`, hint: `${agent.rankedCandidates.length} 位候选人 · 同频度 ${agent.rankedCandidates[0].score}%`, to: `/concert/${agent.eventId}/reveal` }
       : null
 
@@ -126,15 +126,23 @@ export function SyncPage() {
             <ChevronRightIcon className='h-4 w-4 shrink-0 text-white/35' />
           </button>
         ) : (
-          <div className='soft-card flex items-center gap-3 p-3.5'>
+          <button
+            type='button'
+            onClick={() => {
+              if (agent) startNewMatch()
+              navigate(authorized ? `/concert/${concert.id}/task` : `/concert/${concert.id}`)
+            }}
+            className='soft-card flex w-full items-center gap-3 p-3.5 text-left'
+          >
             <span className='flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-brand-500/10 text-brand-300'>
               <SparkleIcon className='h-5 w-5' />
             </span>
-            <div className='min-w-0 flex-1'>
-              <p className='text-[13px] font-semibold text-white'>还没有进行中的匹配</p>
-              <p className='mt-0.5 text-[11px] text-white/50'>选一场演出发起匹配，或者先看看下面的推荐。</p>
-            </div>
-          </div>
+            <span className='min-w-0 flex-1'>
+              <span className='block text-[13px] font-semibold text-white'>{agent ? '重新扫描同频搭子' : '还没有进行中的匹配'}</span>
+              <span className='mt-0.5 block text-[11px] text-white/50'>{agent ? '上次邀请已终结，点这里开一次全新的匹配。' : '选一场演出发起匹配，或者先看看下面的推荐。'}</span>
+            </span>
+            <ChevronRightIcon className='h-4 w-4 shrink-0 text-white/35' />
+          </button>
         )}
 
         <div className='mt-5'>

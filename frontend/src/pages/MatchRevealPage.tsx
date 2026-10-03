@@ -22,7 +22,9 @@ import { WaveformBars } from '../components/musicVisuals'
 const SKIP_REASONS = ['音乐不搭', '同行方式不同', '人数不合适', '其它']
 
 /** 只有真正发出邀请之后的这些状态，才代表「已邀请当前这位候选人」。 */
-const INVITE_ACTIVE_STATUSES = ['awaiting_peer', 'accepted', 'both_confirmed', 'confirmed', 'declined', 'expired', 'cancelled']
+const INVITE_ACTIVE_STATUSES = ['awaiting_peer', 'accepted', 'both_confirmed', 'confirmed', 'declined', 'expired', 'withdrawn', 'cancelled']
+/** 邀请已终结：本次会话不能再回放旧票根，必须重新开启一轮匹配。 */
+const TERMINAL_INVITE_STATUSES = ['withdrawn', 'declined', 'expired', 'cancelled']
 /** 双方确认后刷新：把票面还原到被邀请的那位候选人，否则会落回第 1 位、看不到「进入同行房间」。 */
 const RESTORED_INVITE_STATUSES = ['accepted', 'both_confirmed', 'confirmed']
 
@@ -48,7 +50,7 @@ export function MatchRevealPage() {
   const { concertId = 'night-flight' } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const { agent, agentRunning, agentStarting, invite, peerConfirm, cancelInvite, createRoom, runAgent, pushToast, room } = useSession()
+  const { agent, agentRunning, agentStarting, invite, peerConfirm, cancelInvite, createRoom, runAgent, pushToast, room, dismissedCandidateIds, startNewMatch } = useSession()
   const { flow, patchFlow } = useConcertFlow(concertId)
   const { profile } = useProfile()
   const exitToFrequency = useExitToFrequency()
@@ -62,8 +64,10 @@ export function MatchRevealPage() {
 
   const busy = agentRunning || agentStarting
   const skippedIds = flow.skippedCandidateIds ?? []
+  const dismissedIds = dismissedCandidateIds ?? []
   const ranked = agent?.rankedCandidates ?? []
-  const pool = ranked.filter((item) => !skippedIds.includes(item.userId))
+  // 本轮排除：既包含「暂不同行」记录，也包含已撤回 / 拒绝过的候选人，避免立刻重复推荐同一位。
+  const pool = ranked.filter((item) => !skippedIds.includes(item.userId) && !dismissedIds.includes(item.userId))
   const safeIndex = Math.min(index, Math.max(0, pool.length - 1))
   const current = pool[safeIndex]
   const concert = demoConcerts.find((item) => item.id === concertId)
@@ -159,6 +163,15 @@ export function MatchRevealPage() {
     void runAgent()
   }
 
+  /** 重新扫描：开启全新会话并重置「本轮排除名单」——用户明确要求重新看一遍。 */
+  const rescan = () => {
+    setExhausted(false)
+    setIndex(0)
+    startNewMatch({ clearDismissed: true })
+    navigate(`/concert/${concertId}/running`)
+    void runAgent()
+  }
+
   if (busy) {
     return (
       <PageShellMin title='找到同频的人' onBack={exitToFrequency}>
@@ -205,6 +218,32 @@ export function MatchRevealPage() {
     )
   }
 
+  // 撤回 / 拒绝 / 过期后本次会话已终结：绝不回放旧票根，直接给出终结态与「重新扫描」。
+  if (!peerView && TERMINAL_INVITE_STATUSES.includes(pending?.status ?? '')) {
+    return (
+      <PageShellMin title='找到同频的人' onBack={exitToFrequency}>
+        <StateView
+          status='info'
+          title={
+            pending?.status === 'withdrawn'
+              ? '邀请已撤回，本次匹配已结束'
+              : pending?.status === 'declined'
+                ? '对方暂未接受，本次匹配已结束'
+                : '本次匹配已结束'
+          }
+          description='撤回只终止这一条邀请，不影响这场演出继续匹配；历史邀请会保留在记录里。'
+          actionLabel='重新扫描'
+          onAction={() => {
+            startNewMatch({ clearDismissed: true })
+            navigate(`/concert/${concertId}/task`)
+          }}
+          secondaryLabel='返回首页'
+          onSecondary={exitToFrequency}
+        />
+      </PageShellMin>
+    )
+  }
+
   if (!current || exhausted) {
     const reasonCount = skippedIds.length
     return (
@@ -219,8 +258,8 @@ export function MatchRevealPage() {
                 : '可以重新发起一轮匹配，或回去放宽条件。'
               : 'Agent 不会为了凑人数放宽你的安全条件，也不会编造候选人。'
           }
-          actionLabel='重新发起一轮匹配'
-          onAction={rerun}
+          actionLabel='重新扫描'
+          onAction={rescan}
           secondaryLabel='回去修改条件'
           onSecondary={() => navigate(`/concert/${concertId}/task`)}
         />
@@ -295,7 +334,16 @@ export function MatchRevealPage() {
             <div>
               <Button full size='lg' variant='secondary' disabled>等待对方确认 · {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')}</Button>
               <div className='mt-2 grid grid-cols-2 gap-2'>
-                <Button variant='ghost' size='sm' onClick={() => void cancelInvite(false)}>撤回邀请</Button>
+                <Button
+                  variant='ghost'
+                  size='sm'
+                  onClick={() => {
+                    // 撤回只终止这一条邀请：清空邀请与会话、记入本轮排除名单，然后回到首页。
+                    void cancelInvite(false).then(() => navigate('/'))
+                  }}
+                >
+                  撤回邀请
+                </Button>
                 <Button variant='ghost' size='sm' onClick={exitToFrequency}>返回同频首页</Button>
               </div>
             </div>
@@ -309,8 +357,8 @@ export function MatchRevealPage() {
             <div><p className='mb-2 text-center text-sm text-white/70'>对方暂时没有接受邀请，你可以继续寻找同频搭子。</p><div className='grid grid-cols-2 gap-2'><Button variant='secondary' onClick={nextCandidate}>换一位</Button><Button onClick={exitToFrequency}>返回首页</Button></div></div>
           ) : pending?.status === 'expired' ? (
             <div><p className='mb-2 text-center text-sm text-white/70'>邀请暂未得到回应，本次匹配已结束。</p><div className='grid grid-cols-2 gap-2'><Button variant='secondary' onClick={rerun}>重新匹配</Button><Button onClick={exitToFrequency}>返回首页</Button></div></div>
-          ) : pending?.status === 'cancelled' ? (
-            <div><p className='mb-2 text-center text-sm text-white/70'>邀请已撤回，旧邀请不能再进入房间。</p><Button full onClick={exitToFrequency}>返回首页</Button></div>
+          ) : pending?.status === 'withdrawn' || pending?.status === 'cancelled' ? (
+            <div><p className='mb-2 text-center text-sm text-white/70'>邀请已撤回，旧邀请不能再进入房间，可以重新扫描一轮。</p><Button full onClick={exitToFrequency}>返回首页</Button></div>
           ) : (
             <Button full size='lg' variant='secondary' disabled>当前邀请不可用</Button>
           )

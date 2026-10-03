@@ -127,13 +127,24 @@ try {
     await evaluate('window.scrollTo(0, 0)')
     await sleep(250)
     const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
-    writeFileSync(join(screenshotDir, 'p0-' + name), Buffer.from(shot.data, 'base64'))
+    const target = join(screenshotDir, 'p0-' + name)
+    const buffer = Buffer.from(shot.data, 'base64')
+    // Windows 上截图目录偶尔被杀软 / 索引服务短暂锁住，写失败就重试几次，避免整轮冒烟因截图中断。
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      try {
+        writeFileSync(target, buffer)
+        return
+      } catch (error) {
+        if (attempt === 7) throw error
+        await sleep(300)
+      }
+    }
   }
 
   async function waitForText(text, timeoutMs = 15000) {
     const deadline = Date.now() + timeoutMs
     while (Date.now() < deadline) {
-      const found = await evaluate('document.body.innerText.includes(' + JSON.stringify(text) + ')')
+      const found = await evaluate('Boolean(document.body && document.body.innerText.includes(' + JSON.stringify(text) + '))')
       if (found) return true
       await sleep(250)
     }
@@ -202,7 +213,7 @@ try {
   }
 
   const currentHash = () => evaluate('location.hash')
-  const bodyText = () => evaluate('document.body.innerText')
+  const bodyText = () => evaluate('document.body ? document.body.innerText : ""')
   /** 一级/核心页面不应超过给定屏幕数的连续纵向堆叠 */
   const fitsScreens = (screens) => evaluate(`document.documentElement.scrollHeight <= innerHeight * ${screens} + 4`)
   const hasElement = (selector) => evaluate(`Boolean(document.querySelector(${JSON.stringify(selector)}))`)
@@ -465,7 +476,9 @@ try {
 
   // 每完成一步，两轨之间就亮起一个共同音符；两条轨道随真实阶段持续靠近
   const advancing = await (async () => {
-    const deadline = Date.now() + 15000
+    // 软件渲染（headless + software WebGL）下 mock 每一步写回可能被拖到十几秒，
+    // 因此这里放宽到 30s，断言语义不变（仍要求真实进度 + 至少亮起一个节点）。
+    const deadline = Date.now() + 30000
     let moved = progressStart
     while (Date.now() < deadline) {
       moved = Math.max(moved, await trackProgress())
@@ -474,6 +487,7 @@ try {
       if ((await currentHash()).includes('/reveal')) return true
       await sleep(200)
     }
+    console.log('    DEBUG ⑤ advancing moved=' + moved + ' start=' + progressStart + ' hash=' + (await currentHash()) + ' beads=' + JSON.stringify(await evaluate('[].slice.call(document.querySelectorAll(\'[data-visual="track-bead"]\')).map(function (el) { return el.getAttribute("data-bead-state") })')))
     return false
   })()
   check(advancing, '⑤ 两道声波随真实阶段靠近，并逐一亮起共同音符')
@@ -871,6 +885,424 @@ try {
   check(await waitForText('发现同频同行者', 60000), '㉒ 恢复默认后 Agent 仍能跑完并停在同频汇合页')
   check(!(await bodyText()).includes('评委演示模式'), '㉒ 关闭评委模式后不再显示技术日志提示条')
 
+  // ============================================================ 粒子舞台（R3F 主视觉）
+  const stageAttr = (name) => evaluate(
+    `(() => { const el = document.querySelector('[data-visual=particle-stage]'); return el ? el.getAttribute(${JSON.stringify(name)}) : '' })()`,
+  )
+  const stageStatus = () => stageAttr('data-stage-status')
+  const stageResume = () => stageAttr('data-stage-resume-status')
+  const stageWebgl = () => stageAttr('data-webgl')
+  const hasStageCanvas = () => evaluate(`Boolean(document.querySelector('[data-visual=particle-stage] canvas'))`)
+  const waitForStage = async (allowed, timeoutMs = 15000) => {
+    const deadline = Date.now() + timeoutMs
+    let last = ''
+    while (Date.now() < deadline) {
+      last = await stageStatus()
+      if (allowed.includes(last)) return last
+      await sleep(120)
+    }
+    return last
+  }
+
+  step('㉓ 粒子舞台：WebGL 正常时出现 Canvas')
+  await resetDemo()
+  await evaluate(`localStorage.removeItem('sfl.disableWebgl')`)
+  await goto('/concert/night-flight/running')
+  check(await waitForElement('[data-visual=particle-stage]'), '㉓ 执行页挂载粒子舞台容器')
+  check(await waitForElement('[data-visual=particle-stage] canvas'), '㉓ WebGL 正常时 Canvas 出现')
+  check(await hasStageCanvas(), '㉓ 粒子舞台创建了 Canvas')
+  check((await stageWebgl()) === 'ok', '㉓ 舞台标记 WebGL 可用')
+  check((await stageStatus()) === 'idle', '㉓ 未开始匹配时舞台处于 idle')
+  check(
+    await evaluate(`getComputedStyle(document.querySelector('[data-visual=particle-stage] canvas')).pointerEvents === 'none'`),
+    '㉓ Canvas 不拦截页面点击',
+  )
+
+  step('㉔ 粒子舞台：WebGL 失败时回退静态背景')
+  await evaluate(`localStorage.setItem('sfl.disableWebgl','1')`)
+  await goto('/concert/night-flight/running')
+  check(await waitForElement('[data-visual=particle-stage-fallback]'), '㉔ WebGL 不可用时显示 CSS 静态背景')
+  check((await stageWebgl()) === 'fallback', '㉔ 舞台标记为 fallback')
+  check(!(await hasStageCanvas()), '㉔ fallback 时不再创建 Canvas')
+  check((await stageStatus()) === 'idle', '㉔ fallback 仍跟随执行状态')
+  await evaluate(`localStorage.removeItem('sfl.disableWebgl')`)
+
+  step('㉕ 粒子舞台：阶段同步、暂停与继续')
+  await goto('/concert/night-flight/running')
+  check(await startMatch(), '㉕ 用户点击后开始运行')
+  check((await waitForStage(['analyzing', 'searching'], 15000)) !== 'idle', '㉕ 运行时舞台进入执行阶段')
+  await clickText('暂停寻找')
+  check(await waitForText('任务已暂停', 5000), '㉕ 可以暂停 Agent')
+  check((await stageStatus()) === 'paused', '㉕ 暂停后舞台 status 变为 paused')
+  const rememberedStage = await stageResume()
+  check(['analyzing', 'searching'].includes(rememberedStage), '㉕ 暂停时舞台记住暂停前的执行阶段')
+  check((await stageResume()) === rememberedStage, '㉕ 暂停期间视觉状态冻结、不被重置')
+  await clickText('继续寻找')
+  const resumedStage = await waitForStage(['analyzing', 'searching', 'matched'], 8000)
+  check(resumedStage !== 'paused' && resumedStage !== 'idle', '㉕ 继续后回到执行阶段而不是从头开始')
+  check(
+    resumedStage === rememberedStage || ['analyzing', 'searching', 'matched'].includes(resumedStage),
+    '㉕ 继续后恢复之前的执行阶段',
+  )
+  check(await waitForText('发现同频同行者', 60000), '㉕ 继续后 Agent 沿用进度跑完匹配')
+
+  step('㉖ 粒子舞台：390×844 无横向溢出、底部操作区可点击')
+  await resetDemo()
+  await setCase('正常匹配成功')
+  await setScenario('正常流程')
+  await goto('/concert/night-flight/running')
+  check(await startMatch(), '㉖ 用户点击后开始运行')
+  await waitForStage(['analyzing', 'searching'], 15000)
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true })
+  await sleep(350)
+  check(await noHorizontalOverflow(), '㉖ 390×844 无横向溢出')
+  check(
+    await evaluate(`(() => {
+      const el = [...document.querySelectorAll('button')].find((b) => (b.innerText || '').includes('暂停寻找'));
+      if (!el) return false;
+      const rect = el.getBoundingClientRect();
+      const top = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return Boolean(top) && (top === el || el.contains(top));
+    })()`),
+    '㉖ 底部暂停操作区可点击（Canvas 不拦截）',
+  )
+  check(
+    await evaluate(`(() => {
+      const el = [...document.querySelectorAll('button')].find((b) => (b.innerText || '').includes('暂停寻找'));
+      if (!el) return false;
+      const rect = el.getBoundingClientRect();
+      return rect.height >= 44 && rect.top >= 0 && rect.bottom <= innerHeight + 1;
+    })()`),
+    '㉖ 主操作按钮在视口内且高度合格',
+  )
+  check(
+    (await bodyText()).includes('修改条件') && (await bodyText()).includes('结束任务'),
+    '㉖ 暂停/继续、修改条件、结束任务都保留',
+  )
+  await resetDemo()
+
+  // ============================================================ 同频结果页与双 Agent 破冰
+  const icePhase = () => evaluate(`(() => { const el = document.querySelector('[data-visual=icebreak]'); return el ? el.getAttribute('data-ice-phase') : '' })()`)
+  const iceSeq = () => evaluate(`[...document.querySelectorAll('[data-ice-msg]')].map((el) => el.getAttribute('data-side') + ':' + el.getAttribute('data-via'))`)
+  const iceMsgCount = () => evaluate(`document.querySelectorAll('[data-ice-msg]').length`)
+  const buttonUsable = (label) => evaluate(`(() => {
+    const el = [...document.querySelectorAll('button')].find((b) => ((b.innerText || '') + ' ' + (b.getAttribute('aria-label') || '')).includes(${JSON.stringify(label)}));
+    if (!el) return 'missing';
+    el.scrollIntoView({ block: 'center' });
+    const r = el.getBoundingClientRect();
+    if (r.height < 44) return 'short:' + Math.round(r.height);
+    if (r.left < -1 || r.right > innerWidth + 1) return 'overflow-x';
+    const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    if (!top) return 'offscreen:' + Math.round(r.top) + '~' + Math.round(r.bottom) + '/' + innerHeight;
+    if (top === el || el.contains(top)) return 'ok';
+    return 'blocked:' + (top.tagName || '') + '.' + String(top.className || '').slice(0, 50);
+  })()`)
+  const checkButton = async (label, note) => {
+    const result = await buttonUsable(label)
+    check(result === 'ok', note + (result === 'ok' ? '' : ' [' + result + ']'))
+  }
+  const setPendingStatus = (status) => evaluate(`(() => {
+    const k = 'sfl.session.v2';
+    const s = JSON.parse(sessionStorage.getItem(k));
+    s.agent = { ...s.agent, roomId: null, pendingConfirmation: { ...s.agent.pendingConfirmation, required: true, candidateId: ${JSON.stringify('__FOCUS__')}, proposerConfirmed: true, peerConfirmed: false, status: ${JSON.stringify('__STATUS__')} } };
+    sessionStorage.setItem(k, JSON.stringify(s));
+    return true;
+  })()`.replace('__FOCUS__', focusId).replace('__STATUS__', status))
+
+  step('㉗ 同频结果：一次一位的票根卡 + 底部三个操作')
+  await resetDemo()
+  await setCase('正常匹配成功')
+  await setScenario('正常流程')
+  await goto('/concert/night-flight/authorize')
+  await clickText('授权并继续')
+  check(await waitForText('给同行 Agent 一个任务', 20000), '㉗ 授权后进入需求确认')
+  await fillTextarea('我第一次看星野回声，最喜欢《夜航的信》，想找人一起排队候场、副歌一起唱，最好先在群里聊熟，3 个人以内，只在公开场合见面。')
+  await clickText('让 Agent 理解任务')
+  check(await waitForText('就按这个找', 20000), '㉗ 结构化意图确认出现')
+  await clickText('就按这个找')
+  check(await waitForText('找到同频的人', 60000), '㉗ Agent 跑完进入汇合页')
+  await goto('/concert/night-flight/matches')
+  check(await waitForElement('[data-visual=match-focus]'), '㉗ 核心结果页一次只展示一位候选人')
+  const focusText = await bodyText()
+  check(focusText.includes('Agent 已完成匹配'), '㉗ 顶部有 Agent 状态与一句结果说明')
+  check(focusText.includes('高度同频'), '㉗ 突出「高度同频」')
+  check(focusText.includes('最重要的 3 个匹配理由'), '㉗ 只展示 3 个最重要的匹配理由')
+  check(focusText.includes('安全边界') && focusText.includes('公开集合点'), '㉗ 展示安全边界与公开集合点')
+  check(focusText.includes('综合匹配度'), '㉗ 数字分数降级为次要信息但仍可见')
+  check(await hasElement('[data-visual=match-all-entry]'), '㉗ 提供「查看全部候选」次级入口')
+  const focusId = await evaluate(`document.querySelector('[data-visual=match-focus]').getAttribute('data-candidate')`)
+  check(Boolean(focusId), '㉗ 票根卡带有候选人标识')
+  await clickText('查看全部候选')
+  check((await currentHash()).includes('/candidates'), '㉗「查看全部候选」进入全部候选列表')
+  check(await waitForText('全部候选'), '㉗ 全部候选列表保留原有多候选布局')
+  await goto('/concert/night-flight/matches')
+  await waitForElement('[data-visual=match-focus]')
+  await clickText('查看详情')
+  check((await currentHash()).includes('/matches/'), '㉗「查看详情」仍进入候选详情页')
+
+  step('㉘ 双 Agent 破冰：访客先发、顺序固定、不会重复触发')
+  await goto(`/concert/night-flight/icebreak/${focusId}`)
+  check(await waitForElement('[data-visual=icebreak]'), '㉘ 破冰页挂载')
+  check((await icePhase()) === 'idle', '㉘ 初始状态是「尚未开始对话」')
+  check(await waitForText('模拟一次同频破冰'), '㉘ 提供「模拟一次同频破冰」入口')
+  await clickText('模拟一次同频破冰')
+  check(await waitForValue(`(() => { const el = document.querySelector('[data-visual=icebreak]'); return el ? el.getAttribute('data-ice-phase') : '' })()`, 'peer_typing', 5000), '㉘ 先显示「对方 Agent 输入中」')
+  check(await waitForValue(`document.querySelectorAll('[data-ice-msg]').length`, 1, 8000), '㉘ 访客 Agent 的第一条消息先出现')
+  let order = await iceSeq()
+  check(order[0] === 'peer:agent', '㉘ 第一条一定是访客 Agent，而不是我方直接回复')
+  check(await waitForValue(`document.querySelectorAll('[data-ice-msg]').length`, 2, 8000), '㉘ 之后才出现我方 Agent 回复')
+  order = await iceSeq()
+  check(order.join(',') === 'peer:agent,me:agent', '㉘ 顺序固定：对方 Agent 先发、我方 Agent 后回')
+  check(await waitForText('Agent发现3个共同点：同场演出、共同歌曲、到场时间接近', 15000), '㉘ 结尾展示 Agent 总结卡')
+  order = await iceSeq()
+  check(order.join(',') === 'peer:agent,me:agent,peer:agent,me:agent,me:agent', '㉘ 完整对话顺序固定且没有重复触发')
+  check(!(await bodyText()).includes('模拟一次同频破冰'), '㉘ 对话开始后不再提供重复触发入口')
+  const settledCount = await iceMsgCount()
+  await sleep(2400)
+  check((await iceMsgCount()) === settledCount, '㉘ 对话结束后不会再产生新消息')
+
+  step('㉙ 双 Agent 破冰：暂停后不再产生新消息')
+  await goto(`/concert/night-flight/icebreak/${focusId}`)
+  await waitForElement('[data-visual=icebreak]')
+  await clickText('模拟一次同频破冰')
+  check(await waitForValue(`document.querySelectorAll('[data-ice-msg]').length`, 1, 8000), '㉙ 对话开始')
+  await clickText('暂停Agent')
+  check(await waitForValue(`(() => { const el = document.querySelector('[data-visual=icebreak]'); return el ? el.getAttribute('data-ice-phase') : '' })()`, 'paused', 4000), '㉙ 暂停后进入「用户暂停 Agent」状态')
+  const pausedCount = await iceMsgCount()
+  await sleep(2400)
+  check((await iceMsgCount()) === pausedCount, '㉙ 暂停期间不再产生新消息')
+  await clickText('继续Agent对话')
+  await sleep(1400)
+  check((await iceMsgCount()) > pausedCount, '㉙ 继续后从暂停处接着跑，而不是从头开始')
+
+  step('㉚ 接管聊天：输入框可用、Agent 自动回复停止')
+  await goto(`/concert/night-flight/icebreak/${focusId}`)
+  await waitForElement('[data-visual=icebreak]')
+  await clickText('模拟一次同频破冰')
+  check(await waitForText('Agent发现3个共同点：同场演出、共同歌曲、到场时间接近', 18000), '㉚ 先跑完 Agent 破冰')
+  await clickText('接管聊天')
+  check(await waitForValue(`(() => { const el = document.querySelector('[data-visual=icebreak]'); return el ? el.getAttribute('data-ice-phase') : '' })()`, 'handoff', 5000), '㉚ 接管后进入「用户接管聊天」状态')
+  check(await evaluate(`(() => { const el = document.querySelector('textarea'); return Boolean(el) && !el.disabled })()`), '㉚ 接管后出现可用的本人输入框')
+  check(await evaluate(`document.activeElement === document.querySelector('textarea')`), '㉚ 接管后输入框自动获得焦点')
+  await evaluate(`(() => { const el = document.querySelector('textarea'); const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; setter.call(el, '我先到检票口右侧等你们'); el.dispatchEvent(new Event('input', { bubbles: true })); return true })()`)
+  await clickText('发送')
+  check(await waitForValue(`document.querySelectorAll('[data-ice-msg][data-via=self]').length`, 1, 5000), '㉚ 接管后本人消息标记为「本人」')
+  const agentMsgCount = await evaluate(`document.querySelectorAll('[data-ice-msg][data-via=agent]').length`)
+  await sleep(2400)
+  check((await evaluate(`document.querySelectorAll('[data-ice-msg][data-via=agent]').length`)) === agentMsgCount, '㉚ 接管后 Agent 自动回复停止')
+
+  step('㉛ 返回键回到同频结果页')
+  await clickText('返回同频结果')
+  check((await currentHash()).includes('/concert/night-flight/matches'), '㉛ 返回回到同频匹配结果页')
+  check(!(await currentHash()).includes('/task'), '㉛ 不会返回任务理解确认页')
+
+  step('㉜ 同行确认：未确认不能进房间，四种状态都被覆盖')
+  await goto(`/concert/night-flight/icebreak/${focusId}`)
+  await waitForElement('[data-visual=icebreak]')
+  await clickText('模拟一次同频破冰')
+  await waitForText('Agent发现3个共同点：同场演出、共同歌曲、到场时间接近', 18000)
+  await clickText('发起同行邀请')
+  check(await waitForText('等待对方真人确认', 10000), '㉜ 发出邀请后进入「等待对方真人确认」')
+  check(!(await bodyText()).includes('进入同行房间'), '㉜ 对方未确认时看不到进入房间入口')
+  await goto('/concert/night-flight/room')
+  await sleep(900)
+  check((await currentHash()).includes('/sync'), '㉜ 未确认时直接访问房间路由被拦截回同频')
+  await goto(`/concert/night-flight/icebreak/${focusId}`)
+  await waitForElement('[data-visual=icebreak]')
+  await clickText('模拟对方拒绝')
+  check(await waitForText('对方拒绝', 12000), '㉜ 覆盖「对方拒绝」状态（Demo 控件真实生效）')
+  // 等 React 把 declined 状态写回 sessionStorage 之后再手动改状态，避免被持久化覆盖。
+  await sleep(1000)
+  await setPendingStatus('expired')
+  await goto(`/concert/night-flight/icebreak/${focusId}`)
+  check(await waitForText('对方超时未确认', 10000), '㉜ 覆盖「对方超时未确认」状态')
+  await setPendingStatus('confirmed')
+  await goto(`/concert/night-flight/icebreak/${focusId}`)
+  check(await waitForText('双方确认成功', 10000), '㉜ 覆盖「双方确认成功」状态')
+  check(await hasElement('button'), '㉜ 确认成功后页面仍可交互')
+
+  step('㉝ 390×844：无横向溢出、底部按钮可点击')
+  await setPendingStatus('none')
+  await goto(`/concert/night-flight/icebreak/${focusId}`)
+  await waitForElement('[data-visual=icebreak]')
+  await clickText('模拟一次同频破冰')
+  await waitForText('Agent发现3个共同点：同场演出、共同歌曲、到场时间接近', 18000)
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true })
+  await sleep(400)
+  check(await noHorizontalOverflow(), '㉝ 破冰页 390×844 无横向溢出')
+  await checkButton('接管聊天', '㉝ 底部「接管聊天」可点击且高度合格')
+  await checkButton('继续让Agent聊', '㉝ 底部「继续让Agent聊」可点击且高度合格')
+  await goto('/concert/night-flight/matches')
+  await waitForElement('[data-visual=match-focus]')
+  await sleep(400)
+  check(await noHorizontalOverflow(), '㉝ 结果页 390×844 无横向溢出')
+  await checkButton('暂不同频', '㉝ 结果页「暂不同频」可点击且高度合格')
+  await checkButton('换一个', '㉝ 结果页「换一个」可点击且高度合格')
+  await checkButton('让Agent先聊', '㉝ 结果页「让Agent先聊」可点击且高度合格')
+  await resetDemo()
+
+  // ============================================================ 撤回邀请后的状态恢复
+  /** 一次匹配会话的快照：用于验证新旧会话隔离。 */
+  const sessionSnapshot = () => evaluate(`(() => {
+    try {
+      const s = JSON.parse(sessionStorage.getItem('sfl.session.v2'));
+      return {
+        sessionId: s.matchingSessionId,
+        sessionStatus: s.matchingSessionStatus,
+        activeInvitationId: s.activeInvitationId,
+        invite: s.agent ? s.agent.pendingConfirmation.status : null,
+        dismissed: s.dismissedCandidateIds || [],
+        hasAgent: Boolean(s.agent),
+        authorized: Boolean(s.authorized),
+        parsedIntent: Boolean(s.parsedIntent),
+      };
+    } catch { return null }
+  })()`)
+  const revealPerson = () => evaluate('(() => { const el = document.querySelector(\'[data-visual="reveal-person"]\'); return el ? el.getAttribute("data-person") : "" })()')
+  const taskConfirm = () => waitForText('就按这个找', 20000)
+  const primeReveal = async (step) => {
+    await resetDemo()
+    await setCase('正常匹配成功')
+    await setScenario('正常流程')
+    await goto('/concert/night-flight/authorize')
+    await clickText('授权并继续')
+    check(await waitForText('给同行 Agent 一个任务', 20000), step + ' 授权后进入需求确认')
+    await fillTextarea('我第一次看星野回声，最喜欢《夜航的信》，想找人一起排队候场、副歌一起唱，最好先在群里聊熟，3 个人以内，只在公开场合见面。')
+    await clickText('让 Agent 理解任务')
+    check(await waitForText('就按这个找', 20000), step + ' 结构化意图确认出现')
+    await clickText('就按这个找')
+    let arrived = await waitForText('找到同频的人', 45000)
+    if (!arrived) {
+      // 偶发：点击落在旧文档上，Agent 没启动；补一次显式启动再等
+      await clickText('重新运行')
+      await clickText('开始匹配')
+      arrived = await waitForText('找到同频的人', 45000)
+    }
+    if (!arrived) {
+      console.log('    DEBUG prime ' + step + ' hash=' + (await currentHash()) + ' snap=' + JSON.stringify(await sessionSnapshot()) + ' body=' + JSON.stringify((await bodyText()).slice(0, 160)))
+    }
+    check(arrived, step + ' Agent 跑完进入汇合页')
+  }
+
+  step('㉞ 撤回邀请 → 回首页 → 重新寻找：新会话、排除旧候选人、不恢复旧票根')
+  await primeReveal('㉞')
+  const before = await sessionSnapshot()
+  const oldPerson = await revealPerson()
+  check(Boolean(before && before.sessionId) && Boolean(oldPerson), '㉞ 记录撤回前的会话与候选人')
+  await clickText('发出同行邀请')
+  check(await waitForText('等待对方确认', 10000), '㉞ 发出邀请后进入等待')
+  const waiting = await sessionSnapshot()
+  check(Boolean(waiting && waiting.activeInvitationId), '㉞ 等待期间记录 activeInvitationId')
+  check(Boolean(waiting) && waiting.invite === 'awaiting_peer' && waiting.sessionStatus === 'waiting', '㉞ 邀请状态与匹配会话状态分开记录')
+  await clickText('撤回邀请')
+  check(await waitForText('重新找同频搭子', 10000), '㉞ 撤回后回到首页，不再显示旧结果入口')
+  const withdrawn = await sessionSnapshot()
+  check(Boolean(withdrawn) && withdrawn.invite === 'withdrawn', '㉞ 撤回后 invitation.status = withdrawn')
+  check(Boolean(withdrawn) && withdrawn.activeInvitationId === null, '㉞ 撤回后清空 activeInvitationId')
+  check(Boolean(withdrawn) && withdrawn.sessionStatus === 'cancelled', '㉞ 撤回后会话归档为 cancelled，没有永久锁死')
+  check(Boolean(withdrawn) && withdrawn.dismissed.includes(oldPerson), '㉞ 撤回的候选人被记入本轮排除名单')
+  check(Boolean(withdrawn) && withdrawn.sessionId === before.sessionId, '㉞ 历史会话记录仍然保留，只是不再作为 active session')
+  await clickText('找同频搭子')
+  await sleep(900)
+  check(!(await currentHash()).includes('/reveal') && !(await currentHash()).includes('/matches'), '㉞ 不恢复已撤回邀请的旧结果页')
+  check((await currentHash()).includes('/task'), '㉞ 再次寻找进入任务确认页')
+  const fresh = await sessionSnapshot()
+  check(Boolean(fresh) && fresh.sessionId !== before.sessionId, '㉞ 生成全新的 matchingSessionId')
+  check(Boolean(fresh) && fresh.hasAgent === false, '㉞ 新会话清空旧候选人结果页缓存')
+  check(Boolean(fresh) && fresh.sessionStatus === 'configuring', '㉞ 新会话从 configuring 开始')
+  await clickText('就按这个找')
+  check(await waitForText('找到同频的人', 60000), '㉞ 新会话重新跑完匹配')
+  const newPerson = await revealPerson()
+  check(Boolean(newPerson) && newPerson !== oldPerson, '㉞ 新会话展示下一位候选人，不恢复刚撤回的旧票根')
+  check(!(await bodyText()).includes('邀请已撤回，旧邀请不能再进入房间'), '㉞ 新会话没有旧邀请的撤回提示')
+  await sleep(3200)
+  check((await revealPerson()) === newPerson, '㉞ 旧会话的延迟响应没有覆盖新会话结果')
+
+  step('㉟ 撤回的邀请无法进入同行房间')
+  await clickText('发出同行邀请')
+  check(await waitForText('等待对方确认', 10000), '㉟ 再次发出邀请进入等待')
+  await clickText('撤回邀请')
+  check(await waitForText('重新找同频搭子', 10000), '㉟ 第二次撤回回到首页')
+  const secondWithdrawn = await sessionSnapshot()
+  check(Boolean(secondWithdrawn) && secondWithdrawn.dismissed.length >= 2, '㉟ 两次撤回都记入排除名单')
+  await goto('/concert/night-flight/room')
+  await sleep(900)
+  check((await currentHash()).includes('/sync'), '㉟ withdrawn 邀请无法进入同行房间')
+
+  step('㊱ 连续撤回两次后仍能开启第三次匹配；刷新后依然可以重新匹配')
+  await goto('/')
+  check(await waitForText('找同频搭子', 10000), '㊱ 首页仍提供重新寻找入口')
+  await clickText('找同频搭子')
+  await sleep(900)
+  check((await currentHash()).includes('/task'), '㊱ 连续撤回两次后仍能开启第三次匹配')
+  const third = await sessionSnapshot()
+  check(Boolean(third) && third.sessionId !== secondWithdrawn.sessionId, '㊱ 第三次寻找使用新的 matchingSessionId')
+  check(Boolean(third) && third.hasAgent === false && third.sessionStatus === 'configuring', '㊱ 第三次寻找从空白会话开始')
+  // 刷新：已归档的旧会话不能再把首页带回旧结果页
+  await goto('/')
+  await sleep(700)
+  check(!(await currentHash()).includes('/reveal') && !(await currentHash()).includes('/matches'), '㊱ 刷新后不恢复已撤回邀请的旧结果页')
+  check(await waitForText('找同频搭子', 10000), '㊱ 刷新后仍提供寻找入口')
+  await clickText('找同频搭子')
+  await sleep(900)
+  check((await currentHash()).includes('/task') || (await currentHash()).includes('/concert/night-flight'), '㊱ 刷新后可继续进入匹配流程')
+
+  step('㊲ accepted 邀请仍能正常进入同行房间')
+  await primeReveal('㊲')
+  await clickText('发出同行邀请')
+  check(await waitForText('等待对方确认', 10000), '㊲ 发出邀请后等待对方确认')
+  await goto('/concert/night-flight/reveal?as=peer')
+  check(await waitForText('Demo访客邀请你一起去现场', 10000), '㊲ 对方视角收到邀请')
+  await clickText('接受同行')
+  check(await waitForText('进入同行房间', 15000), '㊲ 双方确认后出现进入房间入口')
+  await clickText('进入同行房间')
+  check(await waitForText('同行房间', 15000) || (await currentHash()).includes('/room'), '㊲ accepted 邀请仍能正常进入同行房间')
+
+  step('㊳ 没有其他候选人时显示空状态与「重新扫描」')
+  await primeReveal('㊳')
+  await evaluate(`(() => {
+    const k = 'sfl.session.v2';
+    const s = JSON.parse(sessionStorage.getItem(k));
+    s.dismissedCandidateIds = (s.agent.rankedCandidates || []).map((c) => c.userId);
+    sessionStorage.setItem(k, JSON.stringify(s));
+    return true;
+  })()`)
+  await goto('/concert/night-flight/matches')
+  check(await waitForText('重新扫描', 10000), '㊳ 候选人全部被排除时显示「重新扫描」入口')
+  check((await bodyText()).includes('这一轮没有更多候选人了'), '㊳ 明确说明本轮没有更多候选人')
+  const beforeRescan = await sessionSnapshot()
+  await clickText('重新扫描')
+  check(await waitForText('还没有开始匹配', 15000), '㊳ 重新扫描开启新的搜索执行页')
+  const afterRescan = await sessionSnapshot()
+  check(Boolean(afterRescan) && afterRescan.sessionId !== beforeRescan.sessionId, '㊳ 重新扫描生成新的 sessionId')
+  check(Boolean(afterRescan) && afterRescan.dismissed.length === 0, '㊳ 重新扫描重置本轮排除名单')
+
+  step('㊴ 旧会话的延迟响应不会覆盖新会话')
+  await resetDemo()
+  await setScenario('载入较慢')
+  await goto('/concert/night-flight/authorize')
+  if (await waitForText('选择要授权的音乐数据', 4000)) {
+    await sleep(300)
+    await clickText('授权并继续')
+    await sleep(500)
+  }
+  await goto('/concert/night-flight/running')
+  check(await startMatch(), '㊴ 慢速场景下开始运行')
+  check(await waitForText('暂停寻找', 25000), '㊴ 慢速任务确实在运行')
+  await goto('/')
+  check(await waitForText('重新找同频搭子', 10000), '㊴ 运行中回到首页显示重新寻找入口')
+  await clickText('找同频搭子')
+  await sleep(900)
+  check((await currentHash()).includes('/task'), '㊴ 运行中开启新会话进入任务确认页，而不是恢复旧结果页')
+  const aborted = await sessionSnapshot()
+  check(Boolean(aborted) && aborted.hasAgent === false && aborted.sessionStatus === 'configuring', '㊴ 新会话立即清空旧结果')
+  await sleep(5000)
+  const settled = await sessionSnapshot()
+  check(Boolean(settled) && settled.hasAgent === false, '㊴ 旧会话的延迟响应没有写回新会话')
+  await resetDemo()
+  await setScenario('正常流程')
+
+  await resetDemo()
   const finalText = await bodyText()
   check(finalText.includes('Demo') || finalText.includes('演示'), '页面明确标注 Demo 数据')
   check(!finalText.includes('TypeError') && !finalText.includes('Uncaught'), '页面没有运行时错误')

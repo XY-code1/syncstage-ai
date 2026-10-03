@@ -413,7 +413,7 @@ export interface ProposedGroup {
 export interface PendingConfirmation {
   required: boolean
   /** candidate = 已找到候选人但双方都没确认；只有 invite 后才进入 awaiting_peer。 */
-  status: 'none' | 'candidate' | 'awaiting_user' | 'awaiting_peer' | 'both_confirmed' | 'accepted' | 'declined' | 'expired' | 'cancelled' | 'blocked' | 'confirmed'
+  status: 'none' | 'candidate' | 'awaiting_user' | 'awaiting_peer' | 'both_confirmed' | 'accepted' | 'declined' | 'expired' | 'withdrawn' | 'cancelled' | 'blocked' | 'confirmed'
   /** 后端生成的邀请 ID：对方视角凭它接受/拒绝，撤回或过期后即失效。 */
   inviteId?: string | null
   candidateId?: string | null
@@ -424,6 +424,12 @@ export interface PendingConfirmation {
   expiresAt?: number
   nextAction?: 'invite' | 'wait_peer' | 'create_room' | 'back_to_matches' | 'relax' | string
 }
+
+/**
+ * 一次匹配会话的生命周期。与单条邀请的 PendingConfirmation.status 解耦：
+ * 撤回一条邀请只会把邀请置为 withdrawn（会话归档为 cancelled），不会永久锁死这场演出的匹配能力。
+ */
+export type MatchingSessionStatus = 'idle' | 'configuring' | 'running' | 'revealed' | 'waiting' | 'completed' | 'cancelled'
 
 export interface AgentState {
   sessionId: string

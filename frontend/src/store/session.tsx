@@ -31,6 +31,7 @@ import type {
   AuthorizationScope,
   DemoCase,
   DemoScenario,
+  MatchingSessionStatus,
   MemoryCardData,
   ParsedIntent,
   Preferences,
@@ -71,9 +72,20 @@ function writeSession(key: string, value: unknown): void {
 /** 刷新 / 重新进入时，不允许把上次中断的 running 任务当成"仍在跑"，更不允许自动重跑。 */
 function sanitizePersisted(raw: Partial<PersistedState>): Partial<PersistedState> {
   const agent = raw.agent
+  const inviteStatus = agent?.pendingConfirmation.status
+  // 邀请已终结（撤回 / 拒绝 / 过期 / 取消）时，旧会话绝不能再被当成「可继续」恢复出来。
+  const inviteTerminal =
+    inviteStatus === 'withdrawn' || inviteStatus === 'declined' || inviteStatus === 'expired' || inviteStatus === 'cancelled'
+  // 兼容没有匹配会话字段的旧持久化数据：按邀请结果推导出会话状态。
+  const withSession: Partial<PersistedState> = raw.matchingSessionStatus
+    ? raw
+    : {
+        ...raw,
+        matchingSessionStatus: inviteTerminal ? 'cancelled' : agent?.rankedCandidates?.length ? 'revealed' : 'idle',
+      }
   if (agent && agent.status === 'running') {
     return {
-      ...raw,
+      ...withSession,
       agent: {
         ...agent,
         status: 'error',
@@ -81,7 +93,7 @@ function sanitizePersisted(raw: Partial<PersistedState>): Partial<PersistedState
       },
     }
   }
-  return raw
+  return withSession
 }
 
 interface PersistedState {
@@ -95,6 +107,14 @@ interface PersistedState {
   peerViewed: boolean
   room: RoomState | null
   memory: MemoryCardData | null
+  /** 本次匹配会话的唯一 ID：与 agent.sessionId（单次运行）解耦，用于隔离新旧会话的异步结果。 */
+  matchingSessionId: string | null
+  /** 匹配会话生命周期：撤回邀请只把会话归档为 cancelled，不会锁死这场演出的匹配能力。 */
+  matchingSessionStatus: MatchingSessionStatus
+  /** 当前等待对方确认的邀请 ID；撤回 / 过期 / 接受后清空。 */
+  activeInvitationId: string | null
+  /** 本轮已撤回 / 拒绝的候选人：新会话优先排除，历史邀请记录仍然保留。 */
+  dismissedCandidateIds: string[]
 }
 
 const emptyState: PersistedState = {
@@ -108,12 +128,26 @@ const emptyState: PersistedState = {
   peerViewed: false,
   room: null,
   memory: null,
+  matchingSessionId: null,
+  matchingSessionStatus: 'idle',
+  activeInvitationId: null,
+  dismissedCandidateIds: [],
 }
 
 export function messageOf(error: unknown): string {
   if (error instanceof ApiError) return error.message
   if (error instanceof Error) return error.message
   return '出了点问题，请稍后再试'
+}
+
+/** 会话终结状态：处于这些状态时，再点「找同频的人」必须新建会话，而不是恢复旧结果。 */
+const SESSION_TERMINAL_STATUSES: MatchingSessionStatus[] = ['completed', 'cancelled']
+
+/** 一次匹配会话的 ID：每次「重新找同频的人」都会生成新值，用来隔离新旧会话的异步结果。 */
+function newMatchingSessionId(): string {
+  const globalCrypto = typeof crypto === 'undefined' ? null : crypto
+  if (globalCrypto && typeof globalCrypto.randomUUID === 'function') return `match-${globalCrypto.randomUUID()}`
+  return `match-${Date.now()}-${Math.round(Math.random() * 1e6)}`
 }
 
 interface SessionContextValue {
@@ -169,6 +203,18 @@ interface SessionContextValue {
   /** 对方视角：凭 inviteId 接受 / 拒绝；接受成功返回唯一房间，失败或拒绝返回 null。 */
   respondInvitation: (inviteId: string, accept: boolean) => Promise<RoomState | null>
   cancelInvite: (expired?: boolean) => Promise<boolean>
+  /** 当前匹配会话 ID：撤回 / 拒绝 / 过期后不再可恢复。 */
+  matchingSessionId: string | null
+  /** 匹配会话生命周期状态；用于区分「可继续的结果页」与「已归档的旧会话」。 */
+  matchingSessionStatus: MatchingSessionStatus
+  /** 是否还有可以继续查看的匹配结果；撤回 / 拒绝 / 过期 / 主动取消后为 false。 */
+  matchResumable: boolean
+  /** 当前等待对方确认的邀请 ID。 */
+  activeInvitationId: string | null
+  /** 本轮已排除（撤回 / 拒绝）的候选人，用于下一轮不重复推荐。 */
+  dismissedCandidateIds: string[]
+  /** 开启一次全新的匹配会话：保留演出、授权与用户条件，清空旧候选人、旧邀请与结果页缓存。 */
+  startNewMatch: (options?: { clearDismissed?: boolean }) => void
   createRoom: () => Promise<boolean>
   confirmAndCreateRoom: (candidateId: string) => Promise<boolean>
   roomError: string
@@ -409,7 +455,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setAgentStarting(false)
       setAgentRunning(true)
       setAgentError('')
-      update(() => ({ agent: null, room: null, memory: null, peerViewed: false }))
+      update((prev) => ({
+        agent: null,
+        room: null,
+        memory: null,
+        peerViewed: false,
+        activeInvitationId: null,
+        // 上一会话已终结（撤回 / 拒绝 / 过期）或从未开始时，开启全新匹配会话；
+        // 暂停后点「继续」则沿用同一会话，避免把暂停恢复误判成新一轮。
+        matchingSessionId:
+          prev.matchingSessionId && !SESSION_TERMINAL_STATUSES.includes(prev.matchingSessionStatus)
+            ? prev.matchingSessionId
+            : newMatchingSessionId(),
+        matchingSessionStatus: 'running',
+      }))
 
       const placeholder: AgentState = {
         sessionId: runId,
@@ -458,7 +517,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           },
         })
         if (activeRunId.current !== runId) return null
-        update(() => ({ agent: next }))
+        const invitePending = next.pendingConfirmation.status === 'awaiting_peer'
+        update(() => ({
+          agent: next,
+          activeInvitationId: invitePending ? next.pendingConfirmation.inviteId ?? null : null,
+          matchingSessionStatus: invitePending ? 'waiting' : 'revealed',
+        }))
         // live 模式下如果有步骤回退到本地规则，必须显式说出来，不能让它看起来像模型输出
         const liveFallback = mode === 'live'
           ? next.trace.find((step) => step.usedFallback || step.status === 'fallback')
@@ -534,7 +598,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (!current) return false
       try {
         const next = await inviteAgent(current, candidateId, agentTransport)
-        update(() => ({ agent: next, peerViewed: false }))
+        update(() => ({
+          agent: next,
+          peerViewed: false,
+          activeInvitationId: next.pendingConfirmation.inviteId ?? null,
+          matchingSessionStatus: 'waiting',
+        }))
         pushToast('已发出同频邀请，等待对方确认')
         schedule(() => update(() => ({ peerViewed: true })), 1400)
         return true
@@ -553,12 +622,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       try {
         const next = await peerConfirmAgent(current, accept, agentTransport)
         if (!accept) {
-          update(() => ({ agent: next, room: null }))
+          update(() => ({ agent: next, room: null, activeInvitationId: null, matchingSessionStatus: 'cancelled' }))
           return true
         }
         const created = await createRoomAgent(next, agentTransport)
         if (!created.room) return false
-        update(() => ({ agent: created.state, room: created.room, peerViewed: true }))
+        update(() => ({ agent: created.state, room: created.room, peerViewed: true, activeInvitationId: null, matchingSessionStatus: 'completed' }))
         return true
       } catch (error) {
         pushToast(messageOf(error), 'warn')
@@ -581,7 +650,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           pushToast('对方已撤回或邀请已过期，本次没有创建房间', 'warn')
           return null
         }
-        update(() => ({ agent: next, room: created, peerViewed: true }))
+        update(() => ({ agent: next, room: created, peerViewed: true, activeInvitationId: null, matchingSessionStatus: 'completed' }))
         pushToast('已接受同行邀请，房间已开启', 'success')
         return created
       } catch (error) {
@@ -591,18 +660,68 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     },
     [agentTransport, pushToast, update],
   )
+  /**
+   * 撤回 / 过期当前邀请。
+   *
+   * 关键语义：撤回只终止这一条邀请，不关闭这场演出的匹配能力。
+   * - 邀请置为 withdrawn（超时则 expired）
+   * - 清空 activeInvitationId，终止等待轮询与倒计时
+   * - 匹配会话归档为 cancelled（不是 completed，不会永久锁死）
+   * - 撤回的候选人记入本轮排除名单，同时保留历史 agent 记录
+   */
   const cancelInvite = useCallback(async (expired = false): Promise<boolean> => {
     const current = state.agent
     if (!current || current.pendingConfirmation.status !== 'awaiting_peer') return false
+    const candidateId = current.pendingConfirmation.candidateId ?? null
     try {
       const next = await cancelInviteAgent(current, expired, agentTransport)
-      update(() => ({ agent: next, room: null }))
+      // 后端契约对撤回返回 cancelled；这里只在本地把字面量细化为 withdrawn，不动任何后端字段。
+      const finalized: AgentState = {
+        ...next,
+        pendingConfirmation: { ...next.pendingConfirmation, status: expired ? 'expired' : 'withdrawn' },
+      }
+      update((prev) => ({
+        agent: finalized,
+        room: null,
+        activeInvitationId: null,
+        matchingSessionStatus: 'cancelled',
+        dismissedCandidateIds:
+          !expired && candidateId
+            ? Array.from(new Set([...prev.dismissedCandidateIds, candidateId]))
+            : prev.dismissedCandidateIds,
+      }))
       return true
     } catch (error) {
       pushToast(messageOf(error), 'warn')
       return false
     }
   }, [agentTransport, pushToast, state.agent, update])
+
+  /**
+   * 开启一次全新的匹配会话。
+   * 保留演出信息、授权范围与用户条件（rawIntent / parsedIntent / prefs），
+   * 清空旧候选人与旧邀请，并生成新的 matchingSessionId —— 旧会话的异步响应靠它被隔离丢弃。
+   */
+  const startNewMatch = useCallback((options?: { clearDismissed?: boolean }) => {
+    runController.current?.abort()
+    runController.current = null
+    activeRunId.current = null
+    setAgentStarting(false)
+    setAgentRunning(false)
+    setAgentError('')
+    setAgentRunId(null)
+    const clearDismissed = options?.clearDismissed === true
+    update((prev) => ({
+      agent: null,
+      room: null,
+      memory: null,
+      peerViewed: false,
+      activeInvitationId: null,
+      matchingSessionId: newMatchingSessionId(),
+      matchingSessionStatus: 'configuring',
+      dismissedCandidateIds: clearDismissed ? [] : prev.dismissedCandidateIds,
+    }))
+  }, [update])
 
   const createRoom = useCallback(async () => {
     const current = state.agent
@@ -615,7 +734,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         pushToast('双方尚未都确认，暂时不能进入房间', 'warn')
         return false
       }
-      update(() => ({ agent: next, room }))
+      update(() => ({ agent: next, room, activeInvitationId: null, matchingSessionStatus: 'completed' }))
       return true
     } catch (error) {
       const message = messageOf(error)
@@ -641,12 +760,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           pushToast('双方尚未都确认，暂时不能进入房间', 'warn')
           return false
         }
-        update(() => ({ agent: serverState, room, peerViewed: true }))
+        update(() => ({ agent: serverState, room, peerViewed: true, activeInvitationId: null, matchingSessionStatus: 'completed' }))
         return true
       }
       const created = createRoomState(next)
       if (!created.room) return false
-      update(() => ({ agent: created.state, room: created.room, peerViewed: true }))
+      update(() => ({ agent: created.state, room: created.room, peerViewed: true, activeInvitationId: null, matchingSessionStatus: 'completed' }))
       return true
     } catch (error) {
       const message = messageOf(error)
@@ -793,6 +912,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     pushToast('演示数据已重置', 'success')
   }, [pushToast])
 
+  /** 会话可继续 = 有结果 + 邀请没有终结（撤回 / 拒绝 / 过期 / 取消）。 */
+  const matchResumable = useMemo(() => {
+    const pending = state.agent?.pendingConfirmation.status
+    if (!state.agent || state.agent.rankedCandidates.length === 0) return false
+    return pending !== 'withdrawn' && pending !== 'declined' && pending !== 'expired' && pending !== 'cancelled'
+  }, [state.agent])
+
   const value = useMemo<SessionContextValue>(
     () => ({
       scenario,
@@ -829,6 +955,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       pauseAgent,
       cancelAgent,
       peerViewed: state.peerViewed,
+      matchingSessionId: state.matchingSessionId,
+      matchingSessionStatus: state.matchingSessionStatus,
+      matchResumable,
+      activeInvitationId: state.activeInvitationId,
+      dismissedCandidateIds: state.dismissedCandidateIds,
+      startNewMatch,
       invite,
       peerConfirm,
       respondInvitation,
@@ -880,6 +1012,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       peerConfirm,
       respondInvitation,
       cancelInvite,
+      startNewMatch,
+      matchResumable,
       pushToast,
       report,
       resetAll,

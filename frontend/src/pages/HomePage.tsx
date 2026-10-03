@@ -6,19 +6,21 @@ import { Vinyl, WaveformBars } from '../components/musicVisuals'
 import { ChevronRightIcon, ShieldIcon, SparkleIcon, UsersIcon } from '../components/icons'
 import { fetchConcerts } from '../lib/api'
 import { demoUsers } from '../data/demoData'
+import { useConcertFlow } from '../store/concertFlow'
 import { useProfile } from '../store/profile'
 import { useSession } from '../store/session'
 import type { Concert } from '../types'
 
 export function HomePage() {
   const navigate = useNavigate()
-  const { agent, room } = useSession()
+  const { agent, room, matchResumable, startNewMatch, authorized, concertId } = useSession()
   const { profile } = useProfile()
   const [concerts, setConcerts] = useState<Concert[]>([])
   useEffect(() => { void fetchConcerts().then((items) => setConcerts(items.slice(0, 3))).catch(() => setConcerts([])) }, [])
   const concert = concerts[0]
   const candidate = demoUsers[0]
-  const resultReady = Boolean(agent?.rankedCandidates.length)
+  // 只有「会话未终结」的结果才算可继续；撤回 / 拒绝 / 过期后不能再恢复旧结果页。
+  const resultReady = matchResumable
   const confirmationStatus = agent?.pendingConfirmation.status
   const statusLabel = confirmationStatus === 'awaiting_peer'
     ? '等待对方确认'
@@ -26,13 +28,26 @@ export function HomePage() {
       ? '对方暂未接受，可以继续寻找'
       : confirmationStatus === 'expired'
         ? '邀请已过期，可以重新匹配'
-        : confirmationStatus === 'accepted' || confirmationStatus === 'confirmed'
-          ? '双方已确认，可进入同行房间'
-          : '同频匹配结果已就绪'
+        : confirmationStatus === 'withdrawn'
+          ? '上次邀请已撤回，可以重新匹配'
+          : confirmationStatus === 'accepted' || confirmationStatus === 'confirmed'
+            ? '双方已确认，可进入同行房间'
+            : '同频匹配结果已就绪'
   const sharedSong = useMemo(() => agent?.rankedCandidates[0]?.sharedSongs[0] ?? concert?.hotSongs[0] ?? '夜航的信', [agent, concert])
+  const eventId = agent?.eventId ?? concert?.id ?? concertId ?? 'night-flight'
+  // 与演出详情页 / 音乐授权页保持一致：只要这一场的音乐数据已授权（无论来自会话还是本机流程记录），
+  // 直接回到任务确认页；否则先去演出详情页补授权。
+  const { flow } = useConcertFlow(eventId)
+  const consentGranted = authorized || flow.consentStatus === 'granted'
   const openPrimary = () => {
     if (room) return navigate(`/concert/${room.concertId}/room`)
-    if (resultReady) return navigate(`/concert/${agent?.eventId ?? 'night-flight'}/reveal`)
+    if (resultReady) return navigate(`/concert/${eventId}/reveal`)
+    // 有历史结果但会话已终结（撤回 / 拒绝 / 过期）：强制开启全新会话，
+    // 只保留演出、授权与用户条件，从任务确认页重新开始，而不是回放旧结果。
+    if (agent) {
+      startNewMatch()
+      return navigate(consentGranted ? `/concert/${eventId}/task` : `/concert/${eventId}`)
+    }
     navigate(concert ? `/concert/${concert.id}` : '/concerts')
   }
 
@@ -63,7 +78,7 @@ export function HomePage() {
           <span className='sr-only'>两条轨道尚未汇合</span>
         </div>
         <button type='button' onClick={openPrimary} className='mt-5 flex min-h-14 w-full items-center justify-center rounded-full bg-brand-400 px-5 text-[18px] font-black text-[#03110a] shadow-[0_10px_34px_rgba(49,245,138,.28)] active:scale-[.99]'>
-          {room ? '继续同行房间' : resultReady ? '查看同频结果' : '开始找同频搭子'} <span className='ml-3 text-2xl'>→</span>
+          {room ? '继续同行房间' : resultReady ? '查看同频结果' : agent ? '重新找同频搭子' : '开始找同频搭子'} <span className='ml-3 text-2xl'>→</span>
         </button>
         <div className='mt-4 flex items-center justify-center gap-3 text-sm text-white/65'><span className='flex items-center gap-1'><UsersIcon className='h-4 w-4 text-brand-300'/>同场匹配</span><span className='text-white/20'>|</span><span>♡ 双方确认</span><span className='text-white/20'>|</span><span className='flex items-center gap-1'><ShieldIcon className='h-4 w-4'/>公开场合见面</span></div>
       </section>

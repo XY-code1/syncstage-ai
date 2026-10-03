@@ -18,7 +18,7 @@ const AGENT_FLOW = ['授权 QQ 音乐画像', '说出同行需求', 'Agent 检�
 export function ConcertDetailPage() {
   const { concertId = 'night-flight' } = useParams()
   const navigate = useNavigate()
-  const { selectConcert, authorized, scopes, agent, room, judgeMode } = useSession()
+  const { selectConcert, authorized, scopes, agent, room, judgeMode, matchResumable, startNewMatch } = useSession()
   const { flow } = useConcertFlow(concertId)
   const [concert, setConcert] = useState<Concert | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -41,8 +41,9 @@ export function ConcertDetailPage() {
     void load()
   }, [load])
 
-  const entryLabel = agent ? '回到同行方案' : authorized ? '继续 AI找同行' : 'AI找同行'
-  const entryTarget = agent ? `/concert/${concertId}/matches` : (authorized || flow.consentStatus === 'granted') ? `/concert/${concertId}/task` : `/concert/${concertId}/authorize`
+  // 只有会话未终结（未撤回 / 拒绝 / 过期）时才「回到同行方案」，否则从任务确认重新开始。
+  const entryLabel = matchResumable ? '回到同行方案' : authorized ? '继续 AI找同行' : 'AI找同行'
+  const entryTarget = matchResumable ? `/concert/${concertId}/matches` : (authorized || flow.consentStatus === 'granted') ? `/concert/${concertId}/task` : `/concert/${concertId}/authorize`
 
   return (
     <div className='flex min-h-screen flex-col'>
@@ -135,7 +136,10 @@ export function ConcertDetailPage() {
                     full
                     size='lg'
                     icon={<SparkleIcon className='h-4 w-4' />}
-                    onClick={() => navigate(entryTarget)}
+                    onClick={() => {
+                      if (!matchResumable && agent) startNewMatch()
+                      navigate(entryTarget)
+                    }}
                   >
                     {entryLabel}
                   </Button>

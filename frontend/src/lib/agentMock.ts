@@ -716,7 +716,7 @@ export function peerConfirmState(state: AgentState, accept: boolean): AgentState
   }
 }
 
-export function cancelInviteState(state: AgentState, status: 'cancelled' | 'expired' = 'cancelled'): AgentState {
+export function cancelInviteState(state: AgentState, status: 'withdrawn' | 'cancelled' | 'expired' = 'withdrawn'): AgentState {
   const pending = state.pendingConfirmation
   if (pending.status !== 'awaiting_peer') return state
   return {
@@ -727,7 +727,12 @@ export function cancelInviteState(state: AgentState, status: 'cancelled' | 'expi
       peerConfirmed: false,
       status,
       nextAction: status === 'expired' ? 'invite' : 'back_to_matches',
-      reason: status === 'expired' ? '邀请暂未得到回应，本次匹配已结束。' : '邀请已由发起人撤回',
+      reason:
+        status === 'expired'
+          ? '邀请暂未得到回应，本次匹配已结束。'
+          : status === 'withdrawn'
+            ? '邀请已由发起人撤回，本次邀请已结束；这场演出仍可重新匹配。'
+            : '邀请已撤回，本次邀请已结束。',
     },
     updatedAt: Date.now(),
   }

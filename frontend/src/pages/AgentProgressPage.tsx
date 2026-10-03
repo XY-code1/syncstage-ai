@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AgentEvidenceBody } from '../components/AgentEvidence'
 import { QQMusicBar } from '../components/QQMusicBar'
@@ -18,6 +18,19 @@ import { SYNC_STAGES, syncStagesOf } from '../lib/agentMock'
 import { useProfile } from '../store/profile'
 import { useSession } from '../store/session'
 import { useExitToFrequency } from '../hooks/useExitToFrequency'
+import type { ParticleStageStatus } from '../components/visuals/particleStageTypes'
+
+// 粒子舞台含 three.js，走懒加载：不进首屏主包，也不阻塞首屏渲染。
+const FrequencyParticleStage = lazy(() => import('../components/visuals/FrequencyParticleStage'))
+
+/** 执行阶段 → 粒子舞台状态：相邻阶段不会停在同一个视觉状态上。 */
+const STAGE_VISUAL: Record<string, ParticleStageStatus> = {
+  profile: 'analyzing',
+  search: 'searching',
+  safety: 'analyzing',
+  rank: 'searching',
+  plan: 'matched',
+}
 
 /** 结果回来后先播完这一段「双轨汇合」动画，再进入同频汇合页（600–900ms）。 */
 const MERGE_HOLD_MS = 800
@@ -76,6 +89,22 @@ export function AgentProgressPage() {
   ]).size
   const filteredCount = agent?.excludedCandidates.length ?? 0
   const exitToFrequency = useExitToFrequency(cancelAgent)
+
+  // 粒子舞台状态完全跟随真实执行阶段；暂停只冻结视觉，恢复后回到原阶段。
+  const stageStatus = useMemo<ParticleStageStatus>(() => {
+    if (paused) return 'paused'
+    if (merged) return 'matched'
+    if (failed || agent?.status === 'error' || agent?.status === 'no_match') return 'idle'
+    if (!active || !currentStage) return 'idle'
+    return STAGE_VISUAL[currentStage.id] ?? 'analyzing'
+  }, [active, agent?.status, currentStage, failed, merged, paused])
+
+  // 0–1：已完成的阶段 + 当前阶段的一小段推进，只用来调整粒子强度，不伪造时间轴。
+  const stageProgress = useMemo(() => {
+    if (merged) return 1
+    if (!active || stages.length === 0) return 0
+    return Math.min(1, (doneCount + 0.35) / stages.length)
+  }, [active, doneCount, merged, stages.length])
 
   // 匹配阶段过渡：进度条与「正在跑的那一个」阶段点交给 GSAP，位置仍然来自真实 stage 状态。
   const stageRow = useRef<HTMLDivElement>(null)
@@ -202,6 +231,16 @@ export function AgentProgressPage() {
       <main className='relative flex-1 overflow-hidden px-4 pb-6 pt-2'>
         <img src='/concert-crowd-bg.png' alt='' className='pointer-events-none absolute inset-0 h-full w-full object-cover object-bottom opacity-35'/>
         <div className='pointer-events-none absolute inset-0 bg-gradient-to-b from-stage-950 via-stage-950/75 to-stage-950/55'/>
+        {/* 粒子舞台：铺在状态信息后方，只做氛围层，不拦点击 */}
+        <Suspense fallback={null}>
+          <FrequencyParticleStage
+            status={stageStatus}
+            progress={stageProgress}
+            leftAvatar={profile.avatar ?? undefined}
+            leftName={profile.nickname || '你'}
+            rightName={top?.candidate.nickname ?? '同频听众'}
+          />
+        </Suspense>
         <section className={failed || agent?.status === 'error' ? 'hidden' : 'relative'}>
           <div data-visual='dual-track' data-track-state={merged ? 'merged' : 'converging'} data-track-progress={stageRatio} className='relative mx-auto h-[342px] w-[342px]'>
             {[0,1,2].map((ring) => <span key={ring} className='absolute rounded-full border border-brand-300/15' style={{inset:18 + ring * 31}}/>)}

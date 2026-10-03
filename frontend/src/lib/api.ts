@@ -173,7 +173,9 @@ export async function cancelInviteAgent(state: AgentState, expired: boolean, tra
   if (transport === 'backend') {
     return request<AgentState>(`/api/agent/sessions/${state.sessionId}/${expired ? 'expire-invite' : 'cancel-invite'}`, { method: 'POST' })
   }
-  return cancelInviteState(state, expired ? 'expired' : 'cancelled')
+  // 后端契约对撤回统一返回 cancelled；前端把「用户主动撤回」与「超时过期」区分开，
+  // 只覆盖本地状态字面量，不新增也不修改任何后端字段。
+  return cancelInviteState(state, expired ? 'expired' : 'withdrawn')
 }
 
 export interface CreateRoomResult {

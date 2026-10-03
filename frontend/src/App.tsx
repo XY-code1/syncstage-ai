@@ -4,8 +4,10 @@ import { AppFrame, Toaster } from './components/AppFrame'
 import { DemoConsole } from './components/DemoConsole'
 import { JudgeBanner } from './components/JudgeBanner'
 import { TabLayout } from './components/TabLayout'
+import { AgentIcebreakPage } from './pages/AgentIcebreakPage'
 import { AgentProgressPage } from './pages/AgentProgressPage'
 import { AgentTracePage } from './pages/AgentTracePage'
+import { AllCandidatesPage } from './pages/AllCandidatesPage'
 import { CandidateDetailPage } from './pages/CandidateDetailPage'
 import { ChatRoomPage } from './pages/ChatRoomPage'
 import { ConcertDetailPage } from './pages/ConcertDetailPage'
@@ -69,8 +71,10 @@ export default function App() {
               <Route path='/concert/:concertId/trace' element={<AgentTracePage />} />
               <Route path='/concert/:concertId/agent' element={<Navigate to='running' replace />} />
               <Route path='/concert/:concertId/matches' element={<MatchResultsPage />} />
+              <Route path='/concert/:concertId/candidates' element={<AllCandidatesPage />} />
               <Route path='/concert/:concertId/matches/:candidateId' element={<CandidateDetailPage />} />
               <Route path='/concert/:concertId/handshake/:candidateId' element={<HandshakePage />} />
+              <Route path='/concert/:concertId/icebreak/:candidateId' element={<AgentIcebreakPage />} />
               <Route path='/concert/:concertId/room' element={<RoomPage />} />
               {/* 第二个浏览器上下文凭 roomId 直接进入同一房间（双人真人聊天验证用） */}
               <Route path='/room/:roomId' element={<RoomPage />} />
