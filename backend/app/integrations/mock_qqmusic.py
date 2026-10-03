@@ -23,6 +23,9 @@ from app.integrations.base import (
 
 ALL_SCOPES = ('favorite_songs', 'top_artists', 'recent_plays', 'followed_events', 'playlist_tags')
 
+# 赛事方给出的官方参考歌单曲名。初赛没有官方 API：这里不猜歌手、专辑、时长或 songmid。
+OFFICIAL_DEMO_TITLES = frozenset(('北京昨夜下了雪', '坏心情', '特别关系', '烟花', '发个定位'))
+
 # 歌手 -> 风格标签，用来生成歌单标签（虚构归类，仅用于演示）
 ARTIST_GENRES: dict[str, str] = {
     '星野回声': '后摇',
@@ -93,13 +96,14 @@ def _build_catalog() -> dict[str, TrackMetadata]:
     catalog: dict[str, TrackMetadata] = {}
     for concert in DEMO_CONCERTS:
         for index, song in enumerate(concert.get('setlist') or []):
+            official_demo = song in OFFICIAL_DEMO_TITLES
             catalog[song] = TrackMetadata(
                 track_id=_track_id(song),
                 title=song,
-                artist=concert['artist'],
-                album=concert['title'],
-                duration_sec=185 + (index * 17) % 120,
-                tags=tuple(concert.get('poster', {}).get('keywords') or []),
+                artist='' if official_demo else concert['artist'],
+                album='' if official_demo else concert['title'],
+                duration_sec=0 if official_demo else 185 + (index * 17) % 120,
+                tags=('赛事Demo模拟数据',) if official_demo else tuple(concert.get('poster', {}).get('keywords') or []),
                 source='mock_demo',
             )
     for title, (artist, album) in EXTRA_TRACKS.items():

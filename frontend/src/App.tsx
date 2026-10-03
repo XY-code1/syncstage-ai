@@ -29,6 +29,7 @@ import { SessionProvider, useSession } from './store/session'
 import { SocialProvider } from './store/social'
 import { ConcertFlowProvider } from './store/concertFlow'
 import { ProfileProvider } from './store/profile'
+import { MusicPlayerProvider } from './components/music/DemoMusicPlayer'
 
 /** 消息中心需要知道当前房间状态，因此放在 SessionProvider 内部 */
 function SocialHost({ children }: { children: ReactNode }) {
@@ -42,6 +43,7 @@ function SocialHost({ children }: { children: ReactNode }) {
 
 export default function App() {
   return (
+    <MusicPlayerProvider>
     <SessionProvider>
       <ConcertFlowProvider>
         <ProfileProvider>
@@ -88,5 +90,6 @@ export default function App() {
         </ProfileProvider>
       </ConcertFlowProvider>
     </SessionProvider>
+    </MusicPlayerProvider>
   )
 }

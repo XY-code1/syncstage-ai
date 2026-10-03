@@ -39,6 +39,9 @@ export interface IcebreakStep {
 /** 结尾总结卡必须出现的固定结论 */
 export const ICEBREAK_SUMMARY_TEXT = 'Agent发现3个共同点：同场演出、共同歌曲、到场时间接近'
 
+/** 没有任何可核验共同歌曲时的总结：不能把「共同歌曲」算进共同点 */
+export const ICEBREAK_SUMMARY_NO_MUSIC_TEXT = 'Agent发现共同点：同场演出、到场时间接近（暂无足够音乐依据）'
+
 export interface IcebreakNames {
   me: string
   peer: string
@@ -52,6 +55,8 @@ export interface IcebreakFacts {
   meetingPoint: string
   /** 双方共同的安全边界 */
   safety: string
+  /** 音乐依据是否充足：不足时对话里不得出现任何共同歌曲 */
+  hasMusicBasis?: boolean
 }
 
 function stamp(base: number, offsetMinutes: number): string {
@@ -67,9 +72,18 @@ function stamp(base: number, offsetMinutes: number): string {
 export function buildIcebreakSteps(names: IcebreakNames, facts: IcebreakFacts, base = Date.now()): IcebreakStep[] {
   const me = names.me
   const peer = names.peer
-  const songA = facts.sharedSongs[0] ?? '夜航的信'
-  const songB = facts.sharedSongs[1] ?? songA
+  // 只引用本轮匹配真实产出的共同歌曲；没有就直说，绝不退回虚构歌曲
+  const shared = facts.sharedSongs.filter((title) => Boolean(title))
+  const hasMusic = shared.length > 0 && (facts.hasMusicBasis ?? true)
+  const songA = shared[0] ?? ''
+  const songB = shared[1] ?? ''
+  const songPair = hasMusic
+    ? songB && songB !== songA
+      ? `《${songA}》和《${songB}》`
+      : `《${songA}》`
+    : ''
   const show = facts.concertTitle || '同场演出'
+  const summaryText = hasMusic ? ICEBREAK_SUMMARY_TEXT : ICEBREAK_SUMMARY_NO_MUSIC_TEXT
 
   const message = (
     id: string,
@@ -100,7 +114,9 @@ export function buildIcebreakSteps(names: IcebreakNames, facts: IcebreakFacts, b
         'peer',
         'agent',
         peer,
-        `你好，我是「${peer}」的 Agent。我们检测到两边都收藏了《${songA}》和《${songB}》，也都要去看「${show}」，想先替你们把共同点对一下。`,
+        hasMusic
+          ? `你好，我是「${peer}」的 Agent。我们检测到两边都收藏了${songPair}，也都要去看「${show}」，想先替你们把共同点对一下。`
+          : `你好，我是「${peer}」的 Agent。双方目前没有可核验的共同歌曲（暂无足够音乐依据），但都要去看「${show}」，可以先对一下到场时间和公开集合点。`,
         stamp(base, 0),
       ),
     },
@@ -113,7 +129,9 @@ export function buildIcebreakSteps(names: IcebreakNames, facts: IcebreakFacts, b
         'me',
         'agent',
         me,
-        `收到。我方用户最想在现场听到《${songA}》，到场计划是${facts.meetingTime}，也就是提前大约 40 分钟到检票口。`,
+        hasMusic
+          ? `收到。我们两边最近都在循环《${songA}》，到场计划是${facts.meetingTime}，也就是提前大约 40 分钟到检票口。`
+          : `收到。音乐依据暂时不足（暂无足够音乐依据），先只核对到场计划：${facts.meetingTime}，提前大约 40 分钟到检票口。`,
         stamp(base, 1),
       ),
     },
@@ -126,7 +144,9 @@ export function buildIcebreakSteps(names: IcebreakNames, facts: IcebreakFacts, b
         'peer',
         'agent',
         peer,
-        `对上了：同场演出、共同歌曲、到场时间也接近。集合点建议用公开的「${facts.meetingPoint}」，两边都能接受吗？`,
+        hasMusic
+          ? `对上了：同场演出、共同歌曲、到场时间也接近。集合点建议用公开的「${facts.meetingPoint}」，两边都能接受吗？`
+          : `先对上确定的部分：同场演出、到场时间接近。集合点建议用公开的「${facts.meetingPoint}」，两边都能接受吗？`,
         stamp(base, 2),
       ),
     },
@@ -147,7 +167,7 @@ export function buildIcebreakSteps(names: IcebreakNames, facts: IcebreakFacts, b
       id: 'summary',
       delay: 700,
       typing: { side: 'me', label: '两个 Agent 正在汇总共同点…' },
-      message: message('summary-card', 'me', 'agent', me, ICEBREAK_SUMMARY_TEXT, stamp(base, 4), true),
+      message: message('summary-card', 'me', 'agent', me, summaryText, stamp(base, 4), true),
     },
   ]
 }

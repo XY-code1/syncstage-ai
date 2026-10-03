@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 from app.agent import orchestrator as orch_module
 from app.main import app
 
-INTENT = '想找个安静一点的女生一起候场，最好同龄，一起把《夜航的信》的副歌唱完，散场后各自回家。'
+INTENT = '想找个安静一点的女生一起候场，最好同龄，一起把《北京昨夜下了雪》的副歌唱完，散场后各自回家。'
 SCOPES = ['favorite_songs', 'top_artists', 'recent_plays', 'followed_events', 'playlist_tags']
 
 
@@ -222,3 +222,4 @@ def test_demo_alias_maps_nickname_to_real_candidate() -> None:
         assert matched['toNickname'] == nickname
         assert _find(_listed(client, 'jiangli'), invite_id) is None  # 不带昵称时不匹配演示替身
         assert _find(client.get('/api/agent/invitations', params={'userId': 'jiangli', 'nickname': '查无此人'}).json()['invitations'], invite_id) is None
+

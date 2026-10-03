@@ -92,12 +92,12 @@ def get_connection() -> Iterator[sqlite3.Connection]:
 
 
 def init_db() -> None:
-    '''建表 + 首次运行时写入 Demo 数据。'''
+    '''建表并同步仓库内的 Demo 基础数据。'''
     with get_connection() as connection:
         connection.executescript(SCHEMA)
-        count = connection.execute('SELECT COUNT(*) AS total FROM concerts').fetchone()['total']
-        if count == 0:
-            seed_demo_data(connection)
+        # Demo 曲库会随源码迭代；启动时幂等刷新演出/用户 fixture，
+        # 但不触碰邀请、房间、聊天等运行状态。
+        seed_demo_data(connection)
 
 
 def seed_demo_data(connection: sqlite3.Connection) -> None:

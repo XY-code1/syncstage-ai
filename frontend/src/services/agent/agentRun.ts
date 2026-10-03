@@ -8,6 +8,7 @@ import {
   type AgentProvider,
 } from './agentTypes'
 import { startLiveAgentSession } from './liveAgentProvider'
+import { reconcileMusicBasis } from '../../lib/musicReconcile'
 
 /**
  * Agent 任务编排的唯一入口。
@@ -108,9 +109,11 @@ export async function runAgentTask(options: AgentTaskOptions): Promise<AgentStat
   }, budgetMs)
 
   try {
-    return await (options.provider.mode === 'mock'
+    const state = await (options.provider.mode === 'mock'
       ? runMockTask(options, controller.signal)
       : runLiveTask(options, controller.signal))
+    // 音乐侧事实统一用官方参考歌单的本地演示数据对齐（见 lib/musicReconcile.ts）
+    return reconcileMusicBasis(state)
   } catch (error) {
     if (timedOut) {
       throw new AgentRunTimeoutError('Agent 运行超过 ' + Math.round(budgetMs / 1000) + ' 秒仍未结束，已自动中止；没有拿到结果，请重新运行')

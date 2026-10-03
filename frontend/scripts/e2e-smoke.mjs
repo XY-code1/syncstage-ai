@@ -1,7 +1,7 @@
 // SyncStage · 演示路径端到端冒烟测试（开发用脚本）
 // 前置：先启动 dev server（npm run dev），再执行 npm run e2e
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -333,7 +333,8 @@ try {
   // ============================================================ 一级导航与四个主页面
   step('① 首页：一级任务在一个屏幕内完成')
   await goto('/')
-  await evaluate('sessionStorage.clear(); localStorage.clear()')
+  // 主 E2E 使用确定性的本地 Demo Agent；真实 DeepSeek 链路由 e2e:llm / availability 测试覆盖。
+  await evaluate("sessionStorage.clear(); localStorage.clear(); localStorage.setItem('sfl.agentMode.v1','mock')")
   await goto('/')
   check(await waitForText('一起去现场'), '① 首页标题可见')
   check(await waitForText('近期演出'), '① 首页保留真实演出入口')
@@ -418,7 +419,7 @@ try {
   await goto('/concert/night-flight/task')
   check(await waitForText('同行 Agent 眼中的你'), '③ 授权后生成可控的临时 Agent 档案')
   const typed = await fillTextarea(
-    '我第一次看星野回声，最喜欢《夜航的信》，想找人一起排队候场、副歌一起唱，最好先在群里聊熟，3 个人以内，只在公开场合见面。',
+    '我第一次看星野回声，最喜欢《烟花》，想找人一起排队候场、副歌一起唱，最好先在群里聊熟，3 个人以内，只在公开场合见面。',
   )
   check(typed === true, '③ 可以输入自然语言需求')
   await clickText('让 Agent 理解任务')
@@ -502,7 +503,7 @@ try {
   const revealText = await bodyText()
   check(
     revealText.includes('共同曲目') &&
-      revealText.includes('夜航的信') &&
+      revealText.includes('烟花') &&
       revealText.includes('你们同频的 3 个理由') &&
       revealText.includes('只在公开场合见面'),
     '⑤ 票根首屏展示曲目、活动、集合信息和三个理由',
@@ -673,7 +674,7 @@ try {
   check((await evaluate(`document.querySelector('[aria-label="同行房间消息"]')?.children.length || 0`)) === beforeDraft, '⑨ Agent帮写不会自动发送')
   const roomDraft = await evaluate(`document.querySelector('input[placeholder="输入消息……"]')?.value || ''`)
   await clickText('发送')
-  check(await waitForValue(`document.querySelector('[aria-label="同行房间消息"]')?.children.length || 0`, beforeDraft + 1), '⑨ 用户点发送后才真正发出')
+  check(await waitForValue(`document.querySelector('[aria-label="同行房间消息"]')?.innerText.includes(${JSON.stringify(roomDraft)}) || false`, true, 10000), '⑨ 用户点发送后才真正发出')
 
   // 举报 / 屏蔽不常驻，长按（右键）才出现
   check(!(await bodyText()).includes('屏蔽成员'), '⑨ 举报与屏蔽不常驻显示')
@@ -1016,7 +1017,7 @@ try {
   await goto('/concert/night-flight/authorize')
   await clickText('授权并继续')
   check(await waitForText('给同行 Agent 一个任务', 20000), '㉗ 授权后进入需求确认')
-  await fillTextarea('我第一次看星野回声，最喜欢《夜航的信》，想找人一起排队候场、副歌一起唱，最好先在群里聊熟，3 个人以内，只在公开场合见面。')
+  await fillTextarea('我第一次看星野回声，最喜欢《烟花》，想找人一起排队候场、副歌一起唱，最好先在群里聊熟，3 个人以内，只在公开场合见面。')
   await clickText('让 Agent 理解任务')
   check(await waitForText('就按这个找', 20000), '㉗ 结构化意图确认出现')
   await clickText('就按这个找')
@@ -1167,7 +1168,7 @@ try {
     await goto('/concert/night-flight/authorize')
     await clickText('授权并继续')
     check(await waitForText('给同行 Agent 一个任务', 20000), step + ' 授权后进入需求确认')
-    await fillTextarea('我第一次看星野回声，最喜欢《夜航的信》，想找人一起排队候场、副歌一起唱，最好先在群里聊熟，3 个人以内，只在公开场合见面。')
+    await fillTextarea('我第一次看星野回声，最喜欢《烟花》，想找人一起排队候场、副歌一起唱，最好先在群里聊熟，3 个人以内，只在公开场合见面。')
     await clickText('让 Agent 理解任务')
     check(await waitForText('就按这个找', 20000), step + ' 结构化意图确认出现')
     await clickText('就按这个找')
@@ -1191,6 +1192,7 @@ try {
   check(Boolean(before && before.sessionId) && Boolean(oldPerson), '㉞ 记录撤回前的会话与候选人')
   await clickText('发出同行邀请')
   check(await waitForText('等待对方确认', 10000), '㉞ 发出邀请后进入等待')
+  await waitForValue(`Boolean(JSON.parse(sessionStorage.getItem('sfl.session.v2') || '{}').activeInvitationId)`, true, 10000)
   const waiting = await sessionSnapshot()
   check(Boolean(waiting && waiting.activeInvitationId), '㉞ 等待期间记录 activeInvitationId')
   check(Boolean(waiting) && waiting.invite === 'awaiting_peer' && waiting.sessionStatus === 'waiting', '㉞ 邀请状态与匹配会话状态分开记录')
@@ -1302,6 +1304,94 @@ try {
   await resetDemo()
   await setScenario('正常流程')
 
+  step('㊵ 官方参考歌单：真实音乐依据、来源标识与版权边界')
+  const OFFICIAL_TITLES = ['北京昨夜下了雪', '坏心情', '特别关系', '烟花', '发个定位']
+  const FICTIONAL_TITLES = ['夜航的信', '回声', '下午四点的海', '星图', '雨中电台', '白噪音情书']
+  const OFFICIAL_URL = 'https://c6.y.qq.com/base/fcgi-bin/u?__=UFgdsoYo9Glo'
+  const mediaAssetsInRepo = () => {
+    const hits = []
+    for (const dir of ['public', 'src']) {
+      if (!existsSync(dir)) continue
+      for (const entry of readdirSync(dir, { recursive: true })) {
+        if (/\.(mp3|m4a|flac|wav|aac|ogg|ape|wma|mp4)$/i.test(String(entry))) hits.push(dir + '/' + String(entry))
+      }
+    }
+    return hits
+  }
+  const musicBasisRows = () => evaluate(`(() => { const raw = sessionStorage.getItem('sfl.session.v2'); if (!raw) return null; const s = JSON.parse(raw); const list = (s.agent && s.agent.rankedCandidates) || []; return list.map((c) => ({ basis: c.musicBasis, score: c.score, band: c.band })) })()`)
+
+  await primeReveal('㊵')
+  const playlistRevealText = await bodyText()
+  check(OFFICIAL_TITLES.some((title) => playlistRevealText.includes(title)), '㊵ 匹配结果引用官方参考歌单歌曲')
+  check(!FICTIONAL_TITLES.some((title) => playlistRevealText.includes(title)), '㊵ 匹配结果不再出现虚构歌曲')
+  check(await hasElement('[data-official-playlist-badge]'), '㊵ 显示「来自官方参考歌单」标识')
+  const playlistLink = await evaluate(`(() => { const el = document.querySelector('[data-official-playlist-link]'); return el ? { href: el.getAttribute('href'), target: el.getAttribute('target'), rel: el.getAttribute('rel') } : null })()`)
+  check(Boolean(playlistLink), '㊵ 提供「打开QQ音乐歌单」按钮')
+  check(Boolean(playlistLink) && playlistLink.href === OFFICIAL_URL, '㊵ 官方歌单按钮地址正确')
+  check(
+    Boolean(playlistLink) &&
+      playlistLink.target === '_blank' &&
+      String(playlistLink.rel).includes('noopener') &&
+      String(playlistLink.rel).includes('noreferrer'),
+    '㊵ 外链使用安全跳转（noopener/noreferrer）',
+  )
+  check(playlistRevealText.includes('赛事Demo模拟数据'), '㊵ 说明音乐来源与 Demo 用途')
+  check((await evaluate("document.querySelectorAll('audio,video').length")) === 0, '㊵ 不自动播放音乐')
+
+  check(await hasElement('[data-demo-music-player][data-playback-mode="official-link"]'), '播放器未配置 localSrc 时降级为官方跳转')
+  check(!(await hasElement('[data-demo-music-player] [aria-label="播放"]')), '无 localSrc 时不显示失效播放按钮')
+  const audioFallback = await evaluate(`(() => { const el = document.querySelector('[data-official-audio-fallback]'); return el ? { href: el.getAttribute('href'), target: el.getAttribute('target'), rel: el.getAttribute('rel') } : null })()`)
+  check(Boolean(audioFallback) && audioFallback.href === OFFICIAL_URL, '无本地音源时指向官方歌单总链接')
+  check(Boolean(audioFallback) && audioFallback.target === '_blank' && String(audioFallback.rel).includes('noopener'), '播放降级链接使用安全跳转')
+  const musicSignalIds = await evaluate(`(() => { const raw = sessionStorage.getItem('sfl.session.v2'); if (!raw) return null; const s = JSON.parse(raw); const item = (s.agent && s.agent.rankedCandidates && s.agent.rankedCandidates[0]) || null; return item && item.scoreBreakdown && item.scoreBreakdown.musicSignals ? item.scoreBreakdown.musicSignals.map((x) => x.id) : null })()`)
+  check(
+    Array.isArray(musicSignalIds) && ['favorite', 'recent', 'mood', 'listening_time'].every((id) => musicSignalIds.includes(id)),
+    '㊵ 评分包含共同收藏/最近循环/情绪曲风/听歌时段四个维度',
+  )
+  const richRows = await musicBasisRows()
+  check(Array.isArray(richRows) && richRows.length > 0, '㊵ 能读到本轮候选人的音乐依据')
+  check(Array.isArray(richRows) && richRows.every((row) => row.band !== 'high' || row.basis === 'rich'), '㊵ 只有音乐依据充足才可能出现「高度同频」')
+  check(Array.isArray(richRows) && richRows.every((row) => row.basis !== 'insufficient' || row.score <= 45), '㊵ 音乐数据不足的候选人不会拿到高分')
+
+  const qqRequests = await evaluate("performance.getEntriesByType('resource').map(function (e) { return e.name }).filter(function (n) { return n.indexOf('qq.com') >= 0 })")
+  check(Array.isArray(qqRequests) && qqRequests.length === 0, '㊵ 官方歌单只做外链跳转，不抓取外部资源')
+  check(mediaAssetsInRepo().length === 0, '㊵ 仓库不包含音频文件或受版权保护的封面素材')
+
+  // 未授权任何音乐数据：不得硬凑高分，必须显示「暂无足够音乐依据」
+  await resetDemo()
+  await setCase('正常匹配成功')
+  await setScenario('正常流程')
+  // ?edit=1 必须带上：否则已授权过的场次会直接跳到任务页，这四项根本没被取消勾选
+  await goto('/concert/night-flight/authorize?edit=1')
+  check(await waitForText('选择要授权的音乐数据', 10000), '㊵ 重新进入授权页可以逐项调整')
+  for (const label of ['收藏歌曲', '常听歌手', '近期播放', '歌单标签']) {
+    await clickText(label)
+    await sleep(140)
+  }
+  check(await waitForText('已选 1/5', 8000), '㊵ 取消勾选后只剩「关注演出」一项音乐数据未授权')
+  await clickText('授权并继续')
+  check(await waitForText('给同行 Agent 一个任务', 20000), '㊵ 只授权同行条件也能继续')
+  await fillTextarea('想找人一起排队候场、副歌一起唱，只在公开场合见面。')
+  await clickText('让 Agent 理解任务')
+  check(await waitForText('就按这个找', 20000), '㊵ 结构化意图确认出现')
+  await clickText('就按这个找')
+  check(await waitForText('找到同频的人', 45000), '㊵ 没有音乐数据时仍能跑完匹配')
+  check((await bodyText()).includes('暂无足够音乐依据'), '㊵ 缺少音乐数据时显示「暂无足够音乐依据」')
+  const noMusicRows = await musicBasisRows()
+  check(Array.isArray(noMusicRows) && noMusicRows.every((row) => row.basis !== 'rich' && row.score <= 45), '㊵ 没有音乐依据时全部候选人都不会拿到高分')
+  await capture('15-official-playlist-no-music.png')
+
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true })
+  await goto('/concert/night-flight/reveal')
+  await sleep(700)
+  check(await noHorizontalOverflow(), '㊵ 390×844 无横向溢出')
+  check(
+    await evaluate(`(() => { const el = document.querySelector('[data-official-playlist-link]'); if (!el) return false; const r = el.getBoundingClientRect(); return r.height >= 44 && r.width >= 44 })()`),
+    '㊵ 官方歌单按钮点击区域不小于 44×44',
+  )
+  await capture('15-official-playlist-source.png')
+  check(await noHorizontalOverflow(), '㊵ 来源卡片不造成横向溢出')
+
   await resetDemo()
   const finalText = await bodyText()
   check(finalText.includes('Demo') || finalText.includes('演示'), '页面明确标注 Demo 数据')
@@ -1327,3 +1417,4 @@ if (failures > 0) {
   console.log('核心演示路径全部可点击通过')
   process.exit(0)
 }
+

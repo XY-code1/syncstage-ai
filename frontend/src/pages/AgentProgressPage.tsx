@@ -229,7 +229,7 @@ export function AgentProgressPage() {
       />
 
       <main className='relative flex-1 overflow-hidden px-4 pb-6 pt-2'>
-        <img src='/concert-crowd-bg.png' alt='' className='pointer-events-none absolute inset-0 h-full w-full object-cover object-bottom opacity-35'/>
+        <img src={`${import.meta.env.BASE_URL}concert-crowd-bg.png`} alt='' className='pointer-events-none absolute inset-0 h-full w-full object-cover object-bottom opacity-35'/>
         <div className='pointer-events-none absolute inset-0 bg-gradient-to-b from-stage-950 via-stage-950/75 to-stage-950/55'/>
         {/* 粒子舞台：铺在状态信息后方，只做氛围层，不拦点击 */}
         <Suspense fallback={null}>

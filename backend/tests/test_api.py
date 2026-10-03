@@ -11,9 +11,9 @@ from app.main import app
 from app.routers import health as health_router
 
 PREFS = {
-    'likedSongs': ['夜航的信', '回声', '下午四点的海'],
+    'likedSongs': ['北京昨夜下了雪', '烟花', '坏心情'],
     'likedArtists': ['星野回声'],
-    'expectedTracks': ['夜航的信', '回声'],
+    'expectedTracks': ['北京昨夜下了雪', '烟花'],
     'story': '加班回家的路上一直在听这张专辑，想找个人一起排队，也想在副歌有人一起唱。',
     'purposes': ['副歌一起唱', '演出后聊音乐'],
     'chatStyle': '温和慢热',
@@ -33,7 +33,7 @@ def test_health_reports_demo_mode(monkeypatch) -> None:
     assert payload['status'] == 'ok'
     assert payload['demoData'] is True
     assert payload['aiEnabled'] is False  # 未配置模型时明确回退到规则
-    assert 'Demo 演示数据' in payload['notice']
+    assert '赛事Demo模拟数据' in payload['notice']
 
 
 def test_concerts_and_detail() -> None:
@@ -47,7 +47,7 @@ def test_concerts_and_detail() -> None:
     assert detail.status_code == 200
     body = detail.json()
     assert body['title'] == '夜航计划'
-    assert body['hotSongs'][0] == '夜航的信'
+    assert body['hotSongs'][0] == '北京昨夜下了雪'
     assert 'meetingPoint' in body and 'name' in body['meetingPoint']
     assert missing.status_code == 404
 
@@ -107,17 +107,17 @@ def test_icebreakers_and_memory_card() -> None:
     with TestClient(app) as client:
         icebreakers = client.post(
             '/api/concerts/night-flight/icebreakers',
-            json={'prefs': PREFS, 'sharedSongs': ['夜航的信', '回声'], 'partnerId': 'u-01'},
+            json={'prefs': PREFS, 'sharedSongs': ['北京昨夜下了雪', '烟花'], 'partnerId': 'u-01'},
         ).json()
         memory = client.post(
             '/api/concerts/night-flight/memory-card',
-            json={'prefs': PREFS, 'sharedSongs': ['夜航的信', '回声'], 'partnerId': 'u-01', 'companionIds': ['u-04']},
+            json={'prefs': PREFS, 'sharedSongs': ['北京昨夜下了雪', '烟花'], 'partnerId': 'u-01', 'companionIds': ['u-04']},
         ).json()
 
     assert len(icebreakers['questions']) >= 6
-    assert any('夜航的信' in question for question in icebreakers['questions'])
+    assert any('北京昨夜下了雪' in question for question in icebreakers['questions'])
     assert memory['concertTitle'] == '夜航计划'
-    assert memory['sharedSongs'] == ['夜航的信', '回声']
+    assert memory['sharedSongs'] == ['北京昨夜下了雪', '烟花']
     assert len(memory['members']) == 3
     assert memory['line']
 
@@ -129,3 +129,5 @@ def test_invite_and_report_are_recorded() -> None:
     assert invite.status_code == 200
     assert invite.json()['status'] == 'pending'
     assert report.json()['status'] == 'pending'
+
+

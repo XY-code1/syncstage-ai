@@ -17,6 +17,9 @@ import { useSession } from '../store/session'
 import { useExitToFrequency } from '../hooks/useExitToFrequency'
 import { Avatar } from '../components/Avatar'
 import { WaveformBars } from '../components/musicVisuals'
+import { MusicBasisNote, OfficialPlaylistBadge, OfficialPlaylistLink, OfficialPlaylistSource, sharedSongLabel } from '../components/OfficialPlaylistSource'
+import { DemoMusicPlayer } from '../components/music/DemoMusicPlayer'
+import { localDemoAudioByTitle } from '../data/localDemoAudioManifest'
 
 /** 「暂不同行」的候选项：只用于优化下一轮匹配，不会通知对方。 */
 const SKIP_REASONS = ['音乐不搭', '同行方式不同', '人数不合适', '其它']
@@ -88,7 +91,9 @@ export function MatchRevealPage() {
     ? { name: current.candidate.nickname, from: current.candidate.avatar.from, to: current.candidate.avatar.to }
     : { name: '待汇合', from: CANDIDATE_TRACK.from, to: CANDIDATE_TRACK.to }
 
-  const sharedSong = current?.sharedSongs[0] ?? concert?.hotSongs[0] ?? '同场曲目'
+  // 共同曲目只来自本轮真实匹配结果；没有就是没有，不回退到虚构歌曲
+  const sharedSong = current?.sharedSongs[0] ?? ''
+  const sharedAudio = useMemo(() => current?.sharedSongs.map(localDemoAudioByTitle).filter((track): track is NonNullable<typeof track> => Boolean(track)) ?? [], [current])
   const purpose = current?.sharedPurposes[0] ?? current?.candidate.purposes[0] ?? '同场观演'
   const sharedSafety = current?.sharedSafety[0] ?? '只在公开场合见面'
   const sameBoundary = (current?.sharedSafety.length ?? 0) > 0
@@ -268,14 +273,16 @@ export function MatchRevealPage() {
   }
 
   return (
-    <div className='flex min-h-screen flex-col'>
+    // h-screen 而不是 min-h-screen：核心结果页必须锁在一个主屏内，超出的票根内容走 main 内部滚动，
+    // 否则页面会随内容一起变高（documentElement.scrollHeight 超过 1.05 屏）。
+    <div className='flex h-screen flex-col'>
       <QQMusicBar
         title='找到同频的人'
         onBack={exitToFrequency}
       />
 
-      <main className='relative flex-1 overflow-hidden px-4 pb-28 pt-2'>
-        <img src='/concert-crowd-bg.png' alt='' className='pointer-events-none absolute inset-0 h-full w-full object-cover object-bottom opacity-30'/>
+      <main className='relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-28 pt-2'>
+        <img src={`${import.meta.env.BASE_URL}concert-crowd-bg.png`} alt='' className='pointer-events-none absolute inset-0 h-full w-full object-cover object-bottom opacity-30'/>
         <div className='pointer-events-none absolute inset-0 bg-gradient-to-b from-stage-950/70 via-stage-950/85 to-stage-950'/>
         <span className='sr-only'>发现同频同行者</span>
         <section data-visual='dual-track' data-track-state='merged' data-track-progress='1' className='relative overflow-hidden border border-brand-300/35 bg-[#081513]/95 px-4 pb-4 pt-5 shadow-[0_0_42px_rgba(49,245,138,.12)]' style={{clipPath:'polygon(0 0,100% 0,100% 44%,96% 47%,100% 50%,100% 100%,0 100%,0 50%,4% 47%,0 44%)'}}>
@@ -288,14 +295,23 @@ export function MatchRevealPage() {
             <p className='text-sm tracking-[.2em] text-white/45'>QQ音乐 · 同频现场</p>
             <h1 className='mt-2 text-[27px] font-black'>{concert?.title ?? '同场演出'} · {concert?.city}</h1>
             <p className='mt-1 text-sm text-white/55'>{concert?.dateLabel} · {concert?.venue}</p>
-            <p className='mt-3 text-sm text-brand-200'>共同曲目：{current.sharedSongs.slice(0, 2).join('、') || sharedSong}</p>
+            <p className='mt-3 text-sm text-brand-200'>共同曲目：{sharedSongLabel(current.sharedSongs.slice(0, 3))}</p>
             <p className='mt-1 text-sm text-white/65'>公开集合：{concert?.meetingPoint.time} · {concert?.meetingPoint.name}</p>
           </div>
           <h2 className='mt-4 text-center text-[16px] font-semibold'>你们同频的 3 个理由</h2>
           <div className='mt-3 space-y-2'>
-            {[`共同喜欢${current.sharedSongs.slice(0,2).join('、') || sharedSong}`, `都想${purpose}`, sameBoundary ? sharedSafety : '只在公开场合见面'].map((reason, i) => <div key={reason} className='flex min-h-11 items-center rounded-2xl bg-white/[.045] px-3 text-sm'><span className='mr-3 flex h-7 w-7 items-center justify-center rounded-full bg-brand-400/15 text-brand-300'>{i+1}</span>{reason}</div>)}
+            {[`共同喜欢${sharedSongLabel(current.sharedSongs.slice(0, 2))}`, `都想${purpose}`, sameBoundary ? sharedSafety : '只在公开场合见面'].map((reason, i) => <div key={reason} className='flex min-h-11 items-center rounded-2xl bg-white/[.045] px-3 text-sm'><span className='mr-3 flex h-7 w-7 items-center justify-center rounded-full bg-brand-400/15 text-brand-300'>{i+1}</span>{reason}</div>)}
           </div>
-          <button type='button' onClick={() => setEvidenceOpen(true)} className='mt-3 min-h-11 w-full text-sm text-white/60'>查看匹配依据 ›</button>
+          <MusicBasisNote basis={current.musicBasis} songs={current.sharedSongs} className='mt-3' />
+          <DemoMusicPlayer tracks={sharedAudio} reason='共同收藏 / 共同最近循环' compact className='mt-3' />
+          <div className='mt-3 flex flex-wrap items-center gap-x-2 gap-y-1'>
+            <OfficialPlaylistBadge />
+            <span className='text-[11.5px] text-white/45'>赛事Demo模拟数据 · 未接入官方 API · 不自动播放音乐</span>
+          </div>
+          <div className='mt-2 flex items-stretch gap-2'>
+            <button type='button' onClick={() => setEvidenceOpen(true)} className='min-h-11 min-w-0 flex-1 text-sm text-white/60'>查看匹配依据 ›</button>
+            <OfficialPlaylistLink className='shrink-0 px-3 text-[13px]' />
+          </div>
         </section>
 
         {pool.length > 1 ? (
@@ -429,6 +445,7 @@ export function MatchRevealPage() {
             confirmState={confirmState}
             code={'NO.' + String(Math.abs(current.userId.length * 37 + current.score * 3) % 9000 + 1000)}
           />
+          <OfficialPlaylistSource />
           <div className='soft-card flex items-start gap-2.5 p-3'>
             <MapPinIcon className='mt-0.5 h-4 w-4 shrink-0 text-brand-300' />
             <p className='text-[12.5px] leading-relaxed text-ink-200'>
@@ -442,6 +459,24 @@ export function MatchRevealPage() {
               {sameBoundary ? sharedSafety : concert?.meetingPoint.note}
               <span className='mt-0.5 block text-ink-400'>不交换私人联系方式，随时可以退出同行。</span>
             </p>
+          </div>
+          <div className='soft-card p-3'>
+            <p className='text-[12.5px] font-semibold text-ink-100'>音乐依据 · 4 个维度</p>
+            <p className='mt-1 text-[11.5px] leading-relaxed text-white/45'>共同收藏 / 共同最近循环 / 曲风或情绪 / 听歌时段，全部来自官方参考歌单的演示数据。</p>
+            <div className='mt-2.5 space-y-1.5'>
+              {(current.scoreBreakdown.musicSignals ?? []).map((signal) => (
+                <div key={signal.id} className='flex items-start gap-2 rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2'>
+                  <span className={'mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ' + (signal.ratio > 0 ? 'bg-brand-400' : 'bg-white/20')} />
+                  <div className='min-w-0'>
+                    <p className='text-[12.5px] text-ink-100'>
+                      {signal.label}
+                      <span className='ml-1.5 text-[11px] text-white/40'>权重 {signal.weight}%</span>
+                    </p>
+                    <p className='mt-0.5 text-[11.5px] leading-relaxed text-white/60'>{signal.detail}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
           <div className='soft-card p-3'>
             <p className='text-[12.5px] font-semibold text-ink-100'>偏好明细</p>

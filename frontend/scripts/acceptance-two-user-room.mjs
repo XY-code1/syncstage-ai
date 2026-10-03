@@ -157,7 +157,7 @@ async function openBrowser(port) {
 }
 
 const SCOPES = ['favorite_songs', 'top_artists', 'recent_plays', 'followed_events', 'playlist_tags']
-const PROMPT = '我第一次看星野回声，最喜欢《夜航的信》，想找人一起排队候场、副歌一起唱，最好先在群里聊熟，3 个人以内，只在公开场合见面。'
+const PROMPT = '我第一次看星野回声，最喜欢《烟花》，想找人一起排队候场、副歌一起唱，最好先在群里聊熟，3 个人以内，只在公开场合见面。'
 const A_MSG = 'A 端消息：我已经到周边售卖台了，你到哪了？'
 const B_MSG = 'B 端回复：我刚过安检，蓝色外套，马上到！'
 

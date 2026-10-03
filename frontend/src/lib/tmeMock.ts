@@ -2,6 +2,7 @@
 // 初赛没有 TME 官方 API，这里用脱敏 Demo 数据模拟；入围后把这一层换成真实接口即可，
 // 上层的 Agent 与页面不需要改动。
 import { demoConcerts, demoUsers } from '../data/demoData'
+import { officialTrackByTitle } from '../data/officialHackathonPlaylist'
 import type {
   AuthorizationScope,
   CandidateFacts,
@@ -27,13 +28,13 @@ export const AUTHORIZATION_SCOPES: ScopeMeta[] = [
     id: 'favorite_songs',
     label: '收藏歌曲',
     detail: '只用于计算你我收藏里的重合曲目',
-    example: '《夜航的信》《回声》《雨中电台》',
+    example: '《北京昨夜下了雪》《坏心情》《特别关系》',
   },
   {
     id: 'top_artists',
     label: '常听歌手',
     detail: '用于判断长期口味是否接近，不做任何公开展示',
-    example: '星野回声、短波电台、潮汐线',
+    example: '初赛未接入官方歌手数据，不猜测填写',
   },
   {
     id: 'recent_plays',
@@ -77,7 +78,7 @@ const PLAYLIST_TAGS: Record<string, string[]> = {
   'u-05': ['加班回家路上', '末班地铁', '同事一起听'],
   'u-06': ['高中回忆杀', '大合唱歌单', '荧光色系'],
   'u-07': ['夜班后台', '调音台旁', '低音贝斯'],
-  'u-08': ['城市散步', '路边摊夜宵', '老歌翻唱'],
+  'u-08': [],
   'u-09': ['深夜写作', '雨声采样', '孤独但不emo'],
   'u-10': ['周末看展', '慢速生活', '咖啡店背景音'],
   'u-11': ['跨城看演出', '高铁歌单', '第一次一个人'],
@@ -86,7 +87,7 @@ const PLAYLIST_TAGS: Record<string, string[]> = {
   'u-14': ['回南天', '潮湿天气', '窗边听歌'],
   'u-15': ['社恐友好', '耳机半只', '安静角落'],
   'u-16': ['现场速写本', '插画BGM', '合唱瞬间'],
-  'u-viewer': ['考研那一年', '深夜通勤', '副歌一定要唱'],
+  'u-viewer': ['考研那一年', '深夜通勤', '副歌一定要唱', '深夜独处', '城市民谣', '现场感'],
 }
 
 const EXTRA_TRACKS: Array<[string, string, string]> = [
@@ -105,10 +106,12 @@ export const DEMO_VIEWER = {
   age: 23,
   city: '上海',
   headline: '第一次用一起去现场，想找个人一起把副歌唱完',
-  likedSongs: ['夜航的信', '回声', '雨中电台', '别在夏天说再见'],
-  likedArtists: ['星野回声', '短波电台', '潮汐线'],
-  expectedTracks: ['夜航的信', '回声'],
-  story: '考研那年在图书馆闭馆后一直听《雨中电台》，这次想站到前面把副歌唱完。',
+  likedSongs: ['北京昨夜下了雪', '坏心情', '特别关系', '烟花'],
+  likedArtists: [],
+  expectedTracks: ['烟花', '发个定位'],
+  recentSongs: ['北京昨夜下了雪', '坏心情', '烟花'],
+  listeningWindow: '22:00-01:00',
+  story: '考研那年在图书馆闭馆后一直听《北京昨夜下了雪》，这次想站到前面把副歌唱完。',
   purposes: ['副歌一起唱', '演出后聊音乐'] as Purpose[],
   chatStyle: '温和慢热' as ChatStyle,
   groupSize: 3 as GroupSize,
@@ -116,6 +119,18 @@ export const DEMO_VIEWER = {
   concertIds: ['night-flight', 'wet-midnight', 'tide-line'],
   blockedUserIds: [] as string[],
   reportedUserIds: [] as string[],
+}
+
+/** 曲风 / 情绪标签：全部来自官方参考歌单的演示标注，没有授权就是空 */
+function moodTagsOf(titles: readonly string[]): string[] {
+  const pool = new Set<string>()
+  for (const title of titles) {
+    const track = officialTrackByTitle(title)
+    if (!track) continue
+    track.tags.forEach((tag) => pool.add(tag))
+    pool.add(track.mood)
+  }
+  return Array.from(pool)
 }
 
 function trackId(title: string): string {
@@ -171,20 +186,27 @@ function tracksFor(titles: readonly string[], fallbackArtist: string): MusicTrac
   return titles.map((title) => {
     const track = TRACK_CATALOG.get(title)
     if (track) return track
+    // 官方参考歌单只提供歌名；歌手信息未核实就不能编，宁可留空
+    const official = officialTrackByTitle(title)
+    if (official) {
+      return { trackId: official.trackId, title, artist: official.artist ?? '', album: official.album ?? '', tags: [...official.tags] }
+    }
     return { trackId: trackId(title), title, artist: fallbackArtist, album: '', tags: [] }
   })
 }
 
-function recentPlaysOf(userId: string, expected: readonly string[], liked: readonly string[]): RecentPlay[] {
+function recentPlaysOf(userId: string, expected: readonly string[], liked: readonly string[], explicit: readonly string[] = []): RecentPlay[] {
   const seed = userId.length
-  const pool = Array.from(new Set([...expected, ...liked])).slice(0, 4)
+  // 优先使用显式的「最近循环」，保证「共同最近循环」这一维来自真实数据
+  const source = explicit.length > 0 ? explicit : [...expected, ...liked]
+  const pool = Array.from(new Set(source)).slice(0, 4)
   return pool
     .map((title, index) => {
       const track = TRACK_CATALOG.get(title)
       return {
         trackId: trackId(title),
         title,
-        artist: track?.artist ?? '星野回声',
+        artist: track?.artist ?? '',
         playCount: 48 - index * 9 - (seed % 5),
         lastPlayedAt: `2026-09-${String(18 + ((seed + index) % 10)).padStart(2, '0')}`,
       }
@@ -204,6 +226,7 @@ export function getMusicProfile(userId: string, scopes: readonly AuthorizationSc
   const liked = raw.likedSongs
   const artists = raw.likedArtists
   const expected = raw.expectedTracks
+  const recent = 'recentSongs' in raw && Array.isArray(raw.recentSongs) ? raw.recentSongs : []
 
   return {
     userId: userId === DEMO_VIEWER.userId ? DEMO_VIEWER.userId : (raw as DemoUser).id,
@@ -211,9 +234,9 @@ export function getMusicProfile(userId: string, scopes: readonly AuthorizationSc
     ageBand: ageBandOf(raw.profileLabel),
     city: raw.city,
     gender: raw.gender,
-    favoriteTracks: granted.has('favorite_songs') ? tracksFor(liked, artists[0] ?? '星野回声') : [],
+    favoriteTracks: granted.has('favorite_songs') ? tracksFor(liked, artists[0] ?? '') : [],
     topArtists: granted.has('top_artists') ? [...artists] : [],
-    recentPlays: granted.has('recent_plays') ? recentPlaysOf(userId, expected, liked) : [],
+    recentPlays: granted.has('recent_plays') ? recentPlaysOf(userId, expected, liked, recent) : [],
     followedEventIds: granted.has('followed_events') ? [...raw.concertIds] : [],
     playlistTags: granted.has('playlist_tags') ? (PLAYLIST_TAGS[userId] ?? []).slice(0, 4) : [],
     authorizedScopes: ALL_SCOPES.filter((scope) => granted.has(scope)),
@@ -237,6 +260,9 @@ export function candidateFacts(userId: string, scopes: readonly AuthorizationSco
   const raw = userId === DEMO_VIEWER.userId ? DEMO_VIEWER : demoUsers.find((user) => user.id === userId)
   if (!raw) return null
 
+  const granted = new Set(scopes)
+  const grantedMusic =
+    granted.has('favorite_songs') || granted.has('recent_plays') || granted.has('playlist_tags')
   const avatar = 'avatar' in raw ? raw.avatar : { from: '#31c27c', to: '#0b1116' }
   return {
     userId: music.userId,
@@ -248,6 +274,9 @@ export function candidateFacts(userId: string, scopes: readonly AuthorizationSco
     topArtists: music.topArtists,
     recentTitles: music.recentPlays.map((play) => play.title),
     playlistTags: music.playlistTags,
+    // 曲风 / 情绪标签来自官方参考歌单的演示标注；未授权的候选人这里就是空数组
+    moodTags: grantedMusic ? moodTagsOf([...music.favoriteTracks.map((track) => track.title), ...music.recentPlays.map((play) => play.title)]) : [],
+    listeningWindow: grantedMusic && 'listeningWindow' in raw ? String((raw as { listeningWindow?: string }).listeningWindow ?? '') : '',
     followedEventIds: music.followedEventIds,
     purposes: [...raw.purposes],
     expectedTracks: [...raw.expectedTracks],

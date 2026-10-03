@@ -14,7 +14,7 @@ from app.agent.tools import TOOLS
 from app.integrations.base import TMEDataUnavailable, get_tme_provider
 from app.main import app
 
-NORMAL_INTENT = '想找个安静一点的女生一起候场，最好同龄，一起把《夜航的信》的副歌唱完，散场后各自回家。'
+NORMAL_INTENT = '想找个安静一点的女生一起候场，最好同龄，一起把《北京昨夜下了雪》的副歌唱完，散场后各自回家。'
 
 REQUIRED_TOOLS = {
     'get_authorized_music_profile',
@@ -319,7 +319,7 @@ def test_mock_provider_interface_and_authorization_scopes() -> None:
     assert len(tracks) == len(profile.favorite_tracks)
     assert provider.get_track_metadata(['trk-not-exist']) == []
 
-    assert provider.search_tracks('夜航的信')
+    assert provider.search_tracks('北京昨夜下了雪')
     assert provider.get_user_music_profile('u-not-exist') is None
     assert provider.get_event_context('not-exist') is None
 
@@ -331,3 +331,5 @@ def test_official_provider_is_not_faked() -> None:
         provider.get_user_music_profile('u-01')
     assert error.value.reason == 'not_implemented'
     assert provider.describe()['implemented'] is False
+
+

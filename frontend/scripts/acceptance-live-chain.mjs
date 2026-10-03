@@ -180,7 +180,7 @@ try {
   const bodyText = () => evaluate('document.body.innerText')
   const currentHash = () => evaluate('location.hash')
 
-  const PROMPT = '我第一次看星野回声，最喜欢《夜航的信》，想找人一起排队候场、副歌一起唱，最好先在群里聊熟，3 个人以内，只在公开场合见面。'
+  const PROMPT = '我第一次看星野回声，最喜欢《烟花》，想找人一起排队候场、副歌一起唱，最好先在群里聊熟，3 个人以内，只在公开场合见面。'
   const HUMAN_MSG = '我已经到场外了，在周边售卖台这边'
 
   // ---------------- 0. 清空旧 localStorage 与 Demo 状态，确认后端是真实 DeepSeek

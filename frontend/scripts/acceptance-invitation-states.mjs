@@ -15,7 +15,7 @@ const INJECT_SESSION = injectArg ? injectArg.slice('--session='.length) : ''
 const API = 'http://127.0.0.1:8020'
 const DEMO_B = { userId: 'jiangli', nickname: '写歌的江离' }
 const PROMPT =
-  '我第一次看星野回声，最喜欢《夜航的信》，想找人一起排队候场、副歌一起唱，最好先在群里聊熟，3 个人以内，只在公开场合见面。'
+  '我第一次看星野回声，最喜欢《烟花》，想找人一起排队候场、副歌一起唱，最好先在群里聊熟，3 个人以内，只在公开场合见面。'
 
 const CHROME = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -412,7 +412,7 @@ try {
   check(await ctxB.waitForText('邀请你一起去现场', 30000), '3.1 B（写歌的江离）看到「Demo访客邀请你一起去现场」')
   const cardText = await ctxB.bodyText()
   check(cardText.includes('Demo访客'), '3.2 邀请人显示为 Demo访客')
-  check(cardText.includes('共同曲目') && cardText.includes('夜航的信'), '3.3 卡片展示共同曲目《夜航的信》')
+  check(cardText.includes('共同曲目') && /北京昨夜下了雪|坏心情|特别关系|烟花|发个定位/.test(cardText), '3.3 卡片展示共同曲目（官方参考歌单歌曲）')
   check(cardText.includes('匹配理由'), '3.4 卡片展示匹配理由')
   check(cardText.includes('公开集合') || cardText.includes('安全集合'), '3.5 卡片展示安全集合点')
   check(cardText.includes('接受同行') && cardText.includes('暂不同行'), '3.6 提供「接受同行」「暂不同行」')

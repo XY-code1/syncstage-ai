@@ -44,7 +44,7 @@ Base URL：`http://127.0.0.1:8000`（可用 `.env` 的 `PORT` 调整；前端通
 {
   "eventId": "night-flight",
   "userId": "u-viewer",
-  "text": "我第一次看星野回声，最喜欢《夜航的信》，想找人一起排队候场、副歌一起唱，3 个人以内，只在公开场合见面。",
+  "text": "我第一次看星野回声，最喜欢《北京昨夜下了雪》，想找人一起排队候场、副歌一起唱，3 个人以内，只在公开场合见面。",
   "authorizedScopes": ["favorite_songs", "top_artists", "recent_plays", "followed_events", "playlist_tags"],
   "parsedIntent": null,
   "demoCase": "normal"
@@ -78,9 +78,9 @@ Base URL：`http://127.0.0.1:8000`（可用 `.env` 的 `PORT` 调整；前端通
         "formula": "音乐偏好 40% + 演出期待 25% + 社交目的 20% + 交流与安全 15%"
       },
       "evidence": [
-        { "kind": "song", "text": "你们都喜欢《夜航的信》", "source": "favorite_songs", "sourceLabel": "收藏歌曲", "items": ["夜航的信"] }
+        { "kind": "song", "text": "你们都喜欢《北京昨夜下了雪》", "source": "favorite_songs", "sourceLabel": "收藏歌曲", "items": ["北京昨夜下了雪"] }
       ],
-      "matchReason": "你们都想在现场听到《夜航的信》；都想「副歌一起唱」……"
+      "matchReason": "你们都想在现场听到《北京昨夜下了雪》；都想「副歌一起唱」……"
     }
   ],
   "proposedGroup": { "size": 3, "members": [], "meetingPoint": { "name": "…", "time": "…" } },
@@ -132,4 +132,6 @@ Base URL：`http://127.0.0.1:8000`（可用 `.env` 的 `PORT` 调整；前端通
 1. 后端 `.env` 设置 `TME_PROVIDER=official`、`TME_CLIENT_ID`、`TME_CLIENT_SECRET`、`TME_API_BASE_URL`；
 2. 按 `backend/app/integrations/official_tme.py` 的 `TODO(1..8)` 实现三个方法（当前全部抛 `TMEDataUnavailable`，不伪造实现）；
 3. Agent、路由与前端无需改动。
+
+
 

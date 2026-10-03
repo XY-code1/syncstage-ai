@@ -69,6 +69,12 @@ export interface DemoUser {
   likedSongs: string[]
   likedArtists: string[]
   expectedTracks: string[]
+  /** 最近循环（授权范围 recent_plays），用于「共同最近循环」这一维 */
+  recentSongs?: string[]
+  /** 曲风 / 情绪标签，用于「曲风或情绪相似」这一维 */
+  moodTags?: string[]
+  /** 主要听歌时段，例如 22:00-01:00，用于「听歌时段相近」这一维 */
+  listeningWindow?: string
   story: string
   purposes: Purpose[]
   chatStyle: ChatStyle
@@ -112,6 +118,8 @@ export type EvidenceKind =
   | 'artist'
   | 'recent'
   | 'tag'
+  | 'mood'
+  | 'listening_time'
   | 'purpose'
   | 'expected'
   | 'intent_song'
@@ -132,7 +140,7 @@ export interface MatchEvidence {
 export type MatchBand = 'high' | 'mid' | 'low'
 
 export interface ScoreDimension {
-  id: 'music' | 'expected' | 'social' | 'style_safety' | string
+  id: 'music' | 'expected' | 'social' | 'style_safety' | 'favorite' | 'recent' | 'mood' | 'listening_time' | string
   label: string
   weight: number
   ratio: number
@@ -145,7 +153,19 @@ export interface ScoreBreakdown {
   band: MatchBand
   dimensions: ScoreDimension[]
   formula: string
+  /** 音乐依据的 4 个子信号（共同收藏 / 最近循环 / 情绪曲风 / 听歌时段），用于「查看依据」 */
+  musicSignals?: ScoreDimension[]
+  /** 音乐依据是否充足：不足时页面必须显示「暂无足够音乐依据」 */
+  musicBasis?: MusicBasis
 }
+
+/**
+ * 音乐依据强度：
+ * - rich：≥2 类音乐信号命中（收藏 / 最近循环 / 情绪曲风 / 听歌时段）
+ * - limited：只有 1 类信号，分数会被压住，不能只靠一首共同歌曲拿高分
+ * - insufficient：完全没有可核验的音乐交集，页面显示「暂无足够音乐依据」
+ */
+export type MusicBasis = 'rich' | 'limited' | 'insufficient'
 
 export interface ScoredCandidate {
   userId: string
@@ -157,6 +177,8 @@ export interface ScoredCandidate {
   sharedArtists: string[]
   sharedRecent: string[]
   sharedTags: string[]
+  sharedMoods: string[]
+  sharedListeningWindows: string[]
   sharedPurposes: string[]
   sharedExpectedTracks: string[]
   sharedSafety: string[]
@@ -164,6 +186,8 @@ export interface ScoredCandidate {
   evidence: MatchEvidence[]
   matchReason: string
   blockedBySafety: boolean
+  /** 音乐依据强度：insufficient 时不得展示高分 */
+  musicBasis: MusicBasis
 }
 
 /** 兼容旧命名 */
@@ -315,6 +339,10 @@ export interface CandidateFacts {
   topArtists: string[]
   recentTitles: string[]
   playlistTags: string[]
+  /** 曲风 / 情绪标签，用于「曲风或情绪相似」这一维 */
+  moodTags: string[]
+  /** 主要听歌时段，例如 22:00-01:00，用于「听歌时段相近」这一维 */
+  listeningWindow: string
   followedEventIds: string[]
   purposes: Purpose[]
   expectedTracks: string[]

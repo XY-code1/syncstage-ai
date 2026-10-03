@@ -23,6 +23,12 @@ import { probeLiveAvailability } from '../services/agent/liveAgentProvider'
 import { buildMemoryCard } from './content'
 import { API_BASE, ApiError, apiRequest, fetchAiStatus } from './http'
 import { MOCK_DISCLAIMER, PROVIDER_INFO, getMusicProfile } from './tmeMock'
+import { reconcileMusicBasis } from './musicReconcile'
+
+/** 后端会话结果：音乐侧事实统一用官方参考歌单的本地演示数据对齐（见 lib/musicReconcile.ts） */
+function withOfficialMusic<T extends AgentState>(state: T): T {
+  return reconcileMusicBasis(state)
+}
 
 // HTTP 层（fetch + 超时 + 错误归一化）已抽到 ./http，这里只做转发，
 // 避免 services/agent 与本文件互相 import 形成循环依赖。
@@ -149,10 +155,10 @@ export type AgentTransport = 'mock' | 'backend'
 
 export async function inviteAgent(state: AgentState, candidateId: string, transport: AgentTransport): Promise<AgentState> {
   if (transport === 'backend') {
-    return request<AgentState>(`/api/agent/sessions/${state.sessionId}/invite`, {
+    return withOfficialMusic(await request<AgentState>(`/api/agent/sessions/${state.sessionId}/invite`, {
       method: 'POST',
       body: { candidateId },
-    })
+    }))
   }
   await delay(scenario === 'slow' ? 1800 : 620)
   return inviteState(state, candidateId)
@@ -160,10 +166,10 @@ export async function inviteAgent(state: AgentState, candidateId: string, transp
 
 export async function peerConfirmAgent(state: AgentState, accept: boolean, transport: AgentTransport): Promise<AgentState> {
   if (transport === 'backend') {
-    return request<AgentState>(`/api/agent/sessions/${state.sessionId}/peer-confirm`, {
+    return withOfficialMusic(await request<AgentState>(`/api/agent/sessions/${state.sessionId}/peer-confirm`, {
       method: 'POST',
       body: { accept },
-    })
+    }))
   }
   await delay(scenario === 'slow' ? 2200 : 900)
   return peerConfirmState(state, accept)
@@ -171,7 +177,7 @@ export async function peerConfirmAgent(state: AgentState, accept: boolean, trans
 
 export async function cancelInviteAgent(state: AgentState, expired: boolean, transport: AgentTransport): Promise<AgentState> {
   if (transport === 'backend') {
-    return request<AgentState>(`/api/agent/sessions/${state.sessionId}/${expired ? 'expire-invite' : 'cancel-invite'}`, { method: 'POST' })
+    return withOfficialMusic(await request<AgentState>(`/api/agent/sessions/${state.sessionId}/${expired ? 'expire-invite' : 'cancel-invite'}`, { method: 'POST' }))
   }
   // 后端契约对撤回统一返回 cancelled；前端把「用户主动撤回」与「超时过期」区分开，
   // 只覆盖本地状态字面量，不新增也不修改任何后端字段。
@@ -186,7 +192,7 @@ export interface CreateRoomResult {
 export async function createRoomAgent(state: AgentState, transport: AgentTransport): Promise<CreateRoomResult> {
   if (transport === 'backend') {
     const next = await request<AgentState>(`/api/agent/sessions/${state.sessionId}/room`, { method: 'POST' })
-    return { state: next, room: (next.room as unknown as RoomState) ?? null }
+    return { state: withOfficialMusic(next), room: (next.room as unknown as RoomState) ?? null }
   }
   await delay(scenario === 'slow' ? 1600 : 520)
   const outcome = createRoomState(state)
@@ -195,7 +201,7 @@ export async function createRoomAgent(state: AgentState, transport: AgentTranspo
 
 /** 轮询单次会话：发起方等待对方确认时，用它把后端最新状态同步回本机。 */
 export async function fetchAgentSession(sessionId: string): Promise<AgentState> {
-  return request<AgentState>(`/api/agent/sessions/${sessionId}`, { timeoutMs: 8000 })
+  return withOfficialMusic(await request<AgentState>(`/api/agent/sessions/${sessionId}`, { timeoutMs: 8000 }))
 }
 
 // ---------------------------------------------------------------------------
@@ -247,20 +253,20 @@ export async function respondInvitation(
   transport: AgentTransport,
 ): Promise<AgentState> {
   if (transport === 'backend') {
-    return request<AgentState>('/api/agent/invitations/' + encodeURIComponent(inviteId) + '/respond', {
+    return withOfficialMusic(await request<AgentState>('/api/agent/invitations/' + encodeURIComponent(inviteId) + '/respond', {
       method: 'POST',
       body: { accept },
-    })
+    }))
   }
   return respondInvitationState(inviteId, accept)
 }
 
 export async function feedbackAgent(state: AgentState, rating: string, tags: string[], comment: string, transport: AgentTransport): Promise<AgentState> {
   if (transport === 'backend') {
-    return request<AgentState>(`/api/agent/sessions/${state.sessionId}/feedback`, {
+    return withOfficialMusic(await request<AgentState>(`/api/agent/sessions/${state.sessionId}/feedback`, {
       method: 'POST',
       body: { rating, tags, comment },
-    })
+    }))
   }
   await delay(240)
   return feedbackState(state, rating, tags, comment)

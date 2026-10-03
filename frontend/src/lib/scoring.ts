@@ -4,6 +4,7 @@ import type {
   CandidateFacts,
   ExcludedCandidate,
   MatchEvidence,
+  MusicBasis,
   ParsedIntent,
   ScoreDimension,
   ScoredCandidate,
@@ -125,11 +126,85 @@ export function checkHardConstraints(args: {
   return null
 }
 
+const SLOT_MINUTES = 30
+const SLOTS_PER_DAY = (24 * 60) / SLOT_MINUTES
+const WINDOW_PATTERN = /^(\d{1,2}):(\d{2})\s*[-~—至]\s*(\d{1,2}):(\d{2})$/
+
+function slotLabel(slot: number): string {
+  const minutes = ((slot % SLOTS_PER_DAY) + SLOTS_PER_DAY) % SLOTS_PER_DAY * SLOT_MINUTES
+  const hour = Math.floor(minutes / 60)
+  const minute = minutes % 60
+  return String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0')
+}
+
+/** 解析 'HH:MM-HH:MM' 听歌时段，跨零点自动处理；无法解析返回 null（不猜测） */
+function parseListeningWindow(value: string): { slots: number[] } | null {
+  const matched = WINDOW_PATTERN.exec((value || '').trim())
+  if (!matched) return null
+  const start = Number(matched[1]) * 60 + Number(matched[2])
+  const end = Number(matched[3]) * 60 + Number(matched[4])
+  if (start >= 24 * 60 || end > 24 * 60) return null
+  const span = ((end - start) + 24 * 60) % (24 * 60) || 24 * 60
+  const slots: number[] = []
+  for (let offset = 0; offset < span; offset += SLOT_MINUTES) {
+    slots.push(Math.floor((start + offset) / SLOT_MINUTES) % SLOTS_PER_DAY)
+  }
+  return { slots }
+}
+
+/** 两段听歌时段的相近程度 0~1：按重叠的半小时格子占较短一段的比例计算 */
+export function listeningWindowAffinity(first: string, second: string): number {
+  const a = parseListeningWindow(first)
+  const b = parseListeningWindow(second)
+  if (!a || !b || a.slots.length === 0 || b.slots.length === 0) return 0
+  const pool = new Set(b.slots)
+  const overlap = a.slots.filter((slot) => pool.has(slot)).length
+  return overlap / Math.min(a.slots.length, b.slots.length)
+}
+
+/** 两段听歌时段的重叠区间文案，例如 '22:30-00:30'；没有重叠时返回空串 */
+export function listeningWindowOverlapLabel(first: string, second: string): string {
+  const a = parseListeningWindow(first)
+  const b = parseListeningWindow(second)
+  if (!a || !b) return ''
+  const pool = new Set(b.slots)
+  const overlap = a.slots.filter((slot) => pool.has(slot))
+  if (overlap.length === 0) return ''
+  if (overlap.length === SLOTS_PER_DAY) return '全天'
+  // 跨零点的重叠在格子编号上会首尾相接（…47, 0, 1…），必须按环形找最长连续段，
+  // 否则会算出「00:00-00:00」这种错误区间。
+  const slots = new Set(overlap)
+  let bestStart = -1
+  let bestLength = 0
+  for (const slot of overlap) {
+    const previous = (slot - 1 + SLOTS_PER_DAY) % SLOTS_PER_DAY
+    if (slots.has(previous)) continue
+    let length = 0
+    let cursor = slot
+    while (slots.has(cursor)) {
+      length += 1
+      cursor = (cursor + 1) % SLOTS_PER_DAY
+    }
+    if (length > bestLength) {
+      bestLength = length
+      bestStart = slot
+    }
+  }
+  if (bestStart < 0) return ''
+  return slotLabel(bestStart) + '-' + slotLabel(bestStart + bestLength)
+}
+
 interface SharedFacts {
   songs: string[]
   artists: string[]
   recent: string[]
   tags: string[]
+  /** 曲风 / 情绪标签重合 */
+  moods: string[]
+  /** 听歌时段重叠区间（为空表示没有明显重叠） */
+  listeningWindows: string[]
+  /** 听歌时段相近程度 0~1 */
+  windowAffinity: number
   expected: string[]
   expectedFromMyFavorite: string[]
   myExpectedInTheirFavorite: string[]
@@ -139,11 +214,16 @@ interface SharedFacts {
 }
 
 function sharedFacts(viewer: CandidateFacts, candidate: CandidateFacts, intent: ParsedIntent): SharedFacts {
+  const windowAffinity = listeningWindowAffinity(viewer.listeningWindow, candidate.listeningWindow)
+  const windowOverlap = listeningWindowOverlapLabel(viewer.listeningWindow, candidate.listeningWindow)
   return {
     songs: intersect(viewer.favoriteTitles, candidate.favoriteTitles),
     artists: intersect(viewer.topArtists, candidate.topArtists),
     recent: intersect(viewer.recentTitles, candidate.recentTitles),
     tags: intersect(viewer.playlistTags, candidate.playlistTags),
+    moods: intersect(viewer.moodTags, candidate.moodTags),
+    listeningWindows: windowOverlap && windowAffinity >= 0.5 ? [windowOverlap] : [],
+    windowAffinity,
     expected: intersect(viewer.expectedTracks, candidate.expectedTracks),
     expectedFromMyFavorite: intersect(candidate.expectedTracks, viewer.favoriteTitles),
     myExpectedInTheirFavorite: intersect(viewer.expectedTracks, candidate.favoriteTitles),
@@ -158,15 +238,106 @@ function weighted(signals: Array<[number, number]>): number {
   return signals.reduce((sum, [weight, value]) => sum + weight * value, 0) / active
 }
 
-function musicDimension(viewer: CandidateFacts, candidate: CandidateFacts, shared: SharedFacts): ScoreDimension {
-  const signals: Array<[number, number]> = [[0.5, Math.min(shared.songs.length / 3, 1)]]
-  if (viewer.topArtists.length && candidate.topArtists.length) signals.push([0.25, Math.min(shared.artists.length / 2, 1)])
-  if (viewer.recentTitles.length && candidate.recentTitles.length) signals.push([0.15, Math.min(shared.recent.length / 2, 1)])
-  if (viewer.playlistTags.length && candidate.playlistTags.length) signals.push([0.1, Math.min(shared.tags.length / 2, 1)])
+/**
+ * 音乐依据的四个可核验子信号。
+ * 需求：共同最近循环 / 共同收藏 / 曲风或情绪相似 / 听歌时段相近，必须都能单独查看。
+ */
+export function musicSignalsOf(shared: SharedFacts): ScoreDimension[] {
+  const favorite: ScoreDimension = {
+    id: 'favorite',
+    label: '共同收藏',
+    weight: 32,
+    ratio: Math.min(shared.songs.length / 3, 1),
+    points: 0,
+    detail: shared.songs.length
+      ? `共同收藏 ${shared.songs.length} 首：${shared.songs.slice(0, 3).map((title) => '《' + title + '》').join('、')}`
+      : '收藏里没有重合的歌曲',
+  }
+  const recent: ScoreDimension = {
+    id: 'recent',
+    label: '共同最近循环',
+    weight: 26,
+    ratio: Math.min(shared.recent.length / 2, 1),
+    points: 0,
+    detail: shared.recent.length
+      ? `最近都在循环：${shared.recent.slice(0, 3).map((title) => '《' + title + '》').join('、')}`
+      : '最近循环没有重合',
+  }
+  const mood: ScoreDimension = {
+    id: 'mood',
+    label: '曲风或情绪相似',
+    weight: 18,
+    ratio: Math.min(shared.moods.length / 3, 1),
+    points: 0,
+    detail: shared.moods.length
+      ? `曲风 / 情绪标签重合：${shared.moods.slice(0, 3).join('、')}`
+      : '曲风与情绪标签没有重合',
+  }
+  const listening: ScoreDimension = {
+    id: 'listening_time',
+    label: '听歌时段相近',
+    weight: 14,
+    ratio: shared.windowAffinity,
+    points: 0,
+    detail: shared.listeningWindows.length
+      ? `听歌时段重合在 ${shared.listeningWindows[0]}，相近度 ${Math.round(shared.windowAffinity * 100)}%`
+      : '听歌时段没有明显重叠',
+  }
+  const artist: ScoreDimension = {
+    id: 'artist',
+    label: '共同常听歌手',
+    weight: 10,
+    ratio: Math.min(shared.artists.length / 2, 1),
+    points: 0,
+    detail: shared.artists.length ? `常听歌手都有 ${shared.artists.slice(0, 3).join('、')}` : '常听歌手没有重合',
+  }
+  return [favorite, recent, mood, listening, artist].map((item) => ({
+    ...item,
+    ratio: Math.round(item.ratio * 10000) / 10000,
+  }))
+}
 
-  let detail = `共同收藏 ${shared.songs.length} 首 · 共同歌手 ${shared.artists.length} 位`
-  if (shared.recent.length) detail += ` · 近期都在听《${shared.recent[0]}》`
-  return { id: 'music', label: DIMENSION_LABELS.music, weight: DIMENSION_WEIGHTS.music, ratio: weighted(signals), points: 0, detail }
+function musicDimension(viewer: CandidateFacts, candidate: CandidateFacts, shared: SharedFacts): ScoreDimension {
+  const signals: Array<[number, number]> = [[0.32, Math.min(shared.songs.length / 3, 1)]]
+  if (viewer.topArtists.length && candidate.topArtists.length) signals.push([0.1, Math.min(shared.artists.length / 2, 1)])
+  if (viewer.recentTitles.length || candidate.recentTitles.length) signals.push([0.26, Math.min(shared.recent.length / 2, 1)])
+  if (viewer.moodTags.length || candidate.moodTags.length) signals.push([0.18, Math.min(shared.moods.length / 3, 1)])
+  if (viewer.listeningWindow || candidate.listeningWindow) signals.push([0.14, shared.windowAffinity])
+
+  const parts: string[] = [`共同收藏 ${shared.songs.length} 首`]
+  if (shared.recent.length) parts.push(`最近都在循环《${shared.recent[0]}》`)
+  if (shared.moods.length) parts.push(`曲风 / 情绪相近：${shared.moods[0]}`)
+  if (shared.listeningWindows.length) parts.push(`听歌时段重合 ${shared.listeningWindows[0]}`)
+  const detail = parts.join(' · ')
+
+  return {
+    id: 'music',
+    label: DIMENSION_LABELS.music,
+    weight: DIMENSION_WEIGHTS.music,
+    ratio: Math.round(weighted(signals) * 10000) / 10000,
+    points: 0,
+    detail,
+  }
+}
+
+/** 音乐依据强度：不足时页面必须显示「暂无足够音乐依据」，且不允许拿高分 */
+export function musicBasisOf(shared: SharedFacts): MusicBasis {
+  const hits = [
+    shared.songs.length > 0,
+    shared.recent.length > 0,
+    shared.moods.length > 0,
+    shared.listeningWindows.length > 0,
+  ].filter(Boolean).length
+  if (hits === 0) return 'insufficient'
+  if (hits === 1) return 'limited'
+  return 'rich'
+}
+
+/** 音乐依据不足时的分数上限：不能只靠一首共同歌曲拿到高分 */
+export const MUSIC_CAP: Record<MusicBasis, number> = {
+  rich: 99,
+  limited: 58,
+  insufficient: 45,
 }
 
 function expectedDimension(viewer: CandidateFacts, candidate: CandidateFacts, shared: SharedFacts): ScoreDimension {
@@ -250,6 +421,12 @@ export function buildEvidence(shared: SharedFacts, intent: ParsedIntent): MatchE
   if (shared.tags.length) {
     add('tag', '歌单标签重合', `你们的歌单都打了「${shared.tags.slice(0, 2).join('」「')}」这样的标签`, 'playlist_tags', '歌单标签', shared.tags.slice(0, 2))
   }
+  if (shared.moods.length) {
+    add('mood', '曲风或情绪相似', `曲风与情绪标签重合：${shared.moods.slice(0, 3).join('、')}`, 'playlist_tags', '歌单标签', shared.moods.slice(0, 3))
+  }
+  if (shared.listeningWindows.length) {
+    add('listening_time', '听歌时段相近', `你们最近的听歌时段重合在 ${shared.listeningWindows[0]} 前后`, 'recent_plays', '听歌时段', shared.listeningWindows)
+  }
   if (shared.purposes.length) {
     add('purpose', '共同同行目的', `都想「${shared.purposes.slice(0, 2).join('」「')}」`, 'intent', '你这次的原话', shared.purposes.slice(0, 2))
   }
@@ -290,6 +467,11 @@ function buildDifferences(viewer: CandidateFacts, candidate: CandidateFacts, int
 
 export function scoreCandidate(viewer: CandidateFacts, intent: ParsedIntent, candidate: CandidateFacts): ScoredCandidate {
   const shared = sharedFacts(viewer, candidate, intent)
+  const musicBasis = musicBasisOf(shared)
+  const musicSignals = musicSignalsOf(shared).map((signal) => ({
+    ...signal,
+    points: Math.round(signal.weight * signal.ratio * 10) / 10,
+  }))
   const dimensions: ScoreDimension[] = [
     musicDimension(viewer, candidate, shared),
     expectedDimension(viewer, candidate, shared),
@@ -302,7 +484,8 @@ export function scoreCandidate(viewer: CandidateFacts, intent: ParsedIntent, can
     dimension.points = Math.round(dimension.weight * dimension.ratio * 10) / 10
     total += dimension.weight * dimension.ratio
   }
-  const score = Math.max(0, Math.min(99, Math.round(total)))
+  // 音乐依据不足时封顶，避免「只靠一首共同歌曲」拿到高分
+  const score = Math.max(0, Math.min(MUSIC_CAP[musicBasis], Math.min(99, Math.round(total))))
 
   return {
     userId: candidate.userId,
@@ -314,11 +497,16 @@ export function scoreCandidate(viewer: CandidateFacts, intent: ParsedIntent, can
       band: bandOf(score),
       dimensions,
       formula: '音乐偏好 40% + 演出期待 25% + 社交目的 20% + 交流与安全偏好 15%',
+      musicSignals,
+      musicBasis,
     },
+    musicBasis,
     sharedSongs: shared.songs,
     sharedArtists: shared.artists,
     sharedRecent: shared.recent,
     sharedTags: shared.tags,
+    sharedMoods: shared.moods,
+    sharedListeningWindows: shared.listeningWindows,
     sharedPurposes: shared.purposes,
     sharedExpectedTracks: shared.expected,
     sharedSafety: shared.safety,

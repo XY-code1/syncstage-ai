@@ -17,8 +17,10 @@ import {
 } from '../components/icons'
 import { demoConcerts } from '../data/demoData'
 import { cn } from '../lib/cn'
+import { MusicBasisNote, OfficialPlaylistSource, sharedSongLabel } from '../components/OfficialPlaylistSource'
+import { DemoMusicPlayer } from '../components/music/DemoMusicPlayer'
+import { localDemoAudioByTitle } from '../data/localDemoAudioManifest'
 import {
-  ICEBREAK_SUMMARY_TEXT,
   buildIcebreakSteps,
   type IcebreakMessage,
   type IcebreakTyping,
@@ -58,6 +60,7 @@ export function AgentIcebreakPage() {
 
   const meName = profile.nickname || '你'
   const peerName = candidate?.candidate.nickname ?? '同频搭子'
+  const sharedAudio = useMemo(() => candidate?.sharedSongs.map(localDemoAudioByTitle).filter((track): track is NonNullable<typeof track> => Boolean(track)) ?? [], [candidate])
 
   const steps = useMemo(() => {
     if (!candidate) return []
@@ -69,6 +72,8 @@ export function AgentIcebreakPage() {
         meetingTime: concert?.meetingPoint.time ?? '18:50（开场前 40 分钟）',
         meetingPoint: concert?.meetingPoint.name ?? '公开的集合点',
         safety: candidate.sharedSafety[0] ?? '只在公开场合见面',
+        // 没有 musicBasis（例如后端模式）时，只要真的拿到了共同歌曲就正常引用，不误报「依据不足」
+        hasMusicBasis: candidate.musicBasis ? candidate.musicBasis === 'rich' : candidate.sharedSongs.length > 0,
       },
     )
   }, [candidate, concert, meName, peerName])
@@ -237,7 +242,7 @@ export function AgentIcebreakPage() {
             <div className='mt-3 space-y-1.5'>
               {[
                 `共同演出：${concert?.title ?? '同场演出'}`,
-                `共同歌曲：${candidate.sharedSongs.slice(0, 2).map((song) => `《${song}》`).join('、') || '同场不同歌'}`,
+                `共同歌曲：${sharedSongLabel(candidate.sharedSongs.slice(0, 2), '暂无足够音乐依据')}`,
                 `到场时间：提前约 40 分钟 · ${concert?.meetingPoint.time ?? ''}`,
                 `公开集合点：${concert?.meetingPoint.name ?? '公开区域'}`,
               ].map((line) => (
@@ -254,6 +259,14 @@ export function AgentIcebreakPage() {
           </div>
         ) : null}
 
+        {candidate ? (
+          <div className='space-y-2'>
+            <MusicBasisNote basis={candidate.musicBasis} songs={candidate.sharedSongs} />
+            <OfficialPlaylistSource compact />
+            <DemoMusicPlayer tracks={sharedAudio} reason='Agent 已核对的共同歌曲' compact />
+          </div>
+        ) : null}
+
         {messages.map((message) =>
           message.summary ? (
             <div key={message.id} data-ice-msg data-ice-id={message.id} data-side={message.side} data-via={message.via} className='rounded-2xl border border-brand-500/35 bg-brand-500/[0.08] p-4 shadow-[0_0_26px_rgba(49,245,138,.14)]'>
@@ -261,7 +274,7 @@ export function AgentIcebreakPage() {
                 <SparkleIcon className='h-4 w-4' />
                 Agent 破冰总结
               </p>
-              <p className='mt-2 text-[15px] font-semibold leading-relaxed text-white'>{ICEBREAK_SUMMARY_TEXT}</p>
+              <p className='mt-2 text-[15px] font-semibold leading-relaxed text-white'>{message.text}</p>
               <p className='mt-2 flex items-start gap-2 text-[14px] leading-relaxed text-white/70'>
                 <ShieldIcon className='mt-0.5 h-4 w-4 shrink-0 text-brand-300' />
                 结论只是建议：是否同行、是否见面，仍然由你们两位真人自己确认。

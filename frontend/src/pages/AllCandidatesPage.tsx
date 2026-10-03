@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Avatar } from '../components/Avatar'
 import { BandPill } from '../components/AgentEvidence'
 import { PageShell } from '../components/PageShell'
+import { MusicBasisNote, OfficialPlaylistSource, sharedSongLabel } from '../components/OfficialPlaylistSource'
 import { Button, Card, DemoBadge, Sheet, StateView } from '../components/ui'
 import { STAGE_BLUE, STAGE_PURPLE, Vinyl, WaveformBars } from '../components/musicVisuals'
 import { cn } from '../lib/cn'
@@ -132,6 +133,7 @@ export function AllCandidatesPage() {
       right={judgeMode ? <DemoBadge label='评委模式' /> : undefined}
     >
       <div className='animate-fade'>
+        <OfficialPlaylistSource compact className='mb-3' />
         <div ref={stripRef} onScroll={onStripScroll} className='snap-row no-scrollbar flex gap-3 overflow-x-auto pb-1'>
           {candidates.map((item) => {
             const skipped = markedIds.includes(item.userId)
@@ -163,10 +165,12 @@ export function AllCandidatesPage() {
                   <WaveformBars className='mt-3.5' bars={13} accent={STAGE_BLUE} height={18} />
 
                   <div className='mt-3.5 flex flex-col gap-2.5'>
-                    <Fact label='共同歌曲' value={item.sharedSongs.slice(0, 2).map((song) => `《${song}》`).join('、') || '同场不同歌'} />
+                    <Fact label='共同歌曲' value={sharedSongLabel(item.sharedSongs.slice(0, 2), '暂无足够音乐依据')} />
                     <Fact label='同行方式' value={item.sharedPurposes.slice(0, 2).join('、') || '同场观演'} />
                     <Fact label='安全边界' value={item.sharedSafety[0] || '只在公开场合见面'} />
                   </div>
+
+                  <MusicBasisNote basis={item.musicBasis} songs={item.sharedSongs} className='mt-3' />
 
                   <p className='mt-3.5 rounded-xl bg-white/[.03] px-3 py-2.5 text-[15px] leading-relaxed text-ink-200'>
                     匹配理由：{firstSentence(item.matchReason)}

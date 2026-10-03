@@ -20,7 +20,7 @@ if (!CHROME) {
 mkdirSync(OUT, { recursive: true })
 
 const PROMPT =
-  '我第一次看星野回声，最喜欢《夜航的信》，想找人一起排队候场、副歌一起唱，最好先在群里聊熟，3 个人以内，只在公开场合见面。'
+  '我第一次看星野回声，最喜欢《烟花》，想找人一起排队候场、副歌一起唱，最好先在群里聊熟，3 个人以内，只在公开场合见面。'
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const profile = mkdtempSync(join(tmpdir(), 'sfl-ui-'))
 const report = []

@@ -87,7 +87,7 @@ export function SyncPage() {
 
       <div className='px-4 pt-4'>
         {invites.map((invite) => {
-          const song = invite.sharedSongs[0] ?? '夜航的信'
+          const song = invite.sharedSongs[0] ?? '暂无足够音乐依据'
           const minutesLeft = invite.expiresAt ? Math.max(0, Math.ceil((invite.expiresAt - Date.now()) / 60000)) : null
           const busy = inviteBusy === invite.inviteId
           return (

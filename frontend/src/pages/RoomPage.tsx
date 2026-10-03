@@ -40,6 +40,8 @@ import {
   type RoomMessage,
 } from '../lib/api'
 import type { RoomState } from '../types'
+import { DemoMusicPlayer } from '../components/music/DemoMusicPlayer'
+import { localDemoAudioByTitle } from '../data/localDemoAudioManifest'
 
 /**
  * 同行房间 = 消息模块里的一个群聊。
@@ -143,7 +145,7 @@ export function RoomPage() {
   const { concertId: concertIdParam = '', roomId: roomIdParam = '' } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
-  const { room: sessionRoom, roomError, toggleTask, toggleMemberConfirm, confirmMeeting, leaveRoom, report, pushToast, agent } = useSession()
+  const { room: sessionRoom, roomError, toggleTask, toggleMemberConfirm, confirmMeeting, leaveRoom, report, pushToast, agent, agentMode } = useSession()
   // 当前用户（我）的昵称与头像统一来自 profile store，禁止在页面里另存一份
   const { profile } = useProfile()
   const { publishRoomChat, markRead } = useSocial()
@@ -261,7 +263,7 @@ export function RoomPage() {
   useEffect(() => {
     if (!roomId) return
     // 本地只做首屏缓存；真正的聊天记录以服务端为准（只认 srv- 开头的后端消息）
-    setMessages(readJson<ChatMessage[]>(chatKey, []).filter((item) => item.id.startsWith('srv-')))
+    setMessages(readJson<ChatMessage[]>(chatKey, []).filter((item) => item.id.startsWith('srv-') || item.id.startsWith('local-')))
     serverCursor.current = 0
     const stored = readJson<RoomMeta>(metaKey, EMPTY_META)
     setMeta({
@@ -281,7 +283,7 @@ export function RoomPage() {
   // 真人消息：进房间先拉全量历史，之后每 2 秒拉一次增量，刷新同样从服务端恢复。
   // 轮询只搬运真人消息，绝不触发模型，也不会自动生成对方的回复。
   useEffect(() => {
-    if (!roomId) return
+    if (!roomId || agentMode !== 'live') return
     let cancelled = false
     const pull = async () => {
       try {
@@ -304,7 +306,7 @@ export function RoomPage() {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [roomId, meUserId])
+  }, [agentMode, roomId, meUserId])
 
   const confirmedCount = room ? room.members.filter((member) => member.confirmed).length : 0
   const total = room?.members.length ?? 0
@@ -336,7 +338,7 @@ export function RoomPage() {
     [concertId, room?.concertId],
   )
   const songs = useMemo(
-    () => demoConcerts.find((concert) => concert.id === (room?.concertId ?? concertId))?.hotSongs ?? ['夜航的信'],
+    () => demoConcerts.find((concert) => concert.id === (room?.concertId ?? concertId))?.hotSongs ?? [],
     [concertId, room?.concertId],
   )
   const draftPool = room?.icebreakers?.length ? room.icebreakers : ['你最期待今晚现场的哪一首歌？']
@@ -403,6 +405,19 @@ export function RoomPage() {
     const text = input.trim()
     if (locked || !text || !roomId) return
     setInput('')
+    if (agentMode !== 'live') {
+      setMessages((prev) => [...prev, {
+        id: `local-${Date.now()}`,
+        userId: meUserId,
+        nickname: meName,
+        text,
+        time: nowTime(),
+        mine: true,
+      }])
+      inputRef.current?.focus()
+      stickToBottom()
+      return
+    }
     try {
       // 先落库再显示：后端保存成功才进聊天，两个浏览器上下文看到的是同一份记录
       const saved = await sendRoomMessage(roomId, { senderId: meUserId, senderName: meName, content: text })
@@ -934,6 +949,7 @@ export function RoomPage() {
       {/* ---------------- 共享歌曲：只填入输入框，不自动发送 ---------------- */}
       <Sheet open={sheet === 'share'} onClose={() => setSheet('none')} title='共享歌曲' description='选一首这场演出的歌，填入输入框后由你自己发送。'>
         <div className='space-y-2'>
+          <DemoMusicPlayer tracks={songs.map(localDemoAudioByTitle).filter((track): track is NonNullable<typeof track> => Boolean(track))} reason='双方共同歌单' compact />
           {songs.map((song) => (
             <button
               key={song}

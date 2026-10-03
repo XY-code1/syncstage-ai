@@ -215,7 +215,7 @@ const DEFAULT_MESSAGES: Record<string, ChatMessage[]> = {
       threadId: 'dm-jiangli',
       authorId: 'u-08',
       authorName: '写歌的江离',
-      text: '看到我们共同收藏了《夜航的信》，你也是从这张专辑开始听他们的吗？',
+      text: '看到我们共同收藏了《烟花》，你也是从这张歌单开始听他们的吗？',
       time: '18:38',
     },
     {

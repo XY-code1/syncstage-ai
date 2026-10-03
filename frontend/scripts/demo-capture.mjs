@@ -160,7 +160,7 @@ async function main() {
     const el = document.querySelector('textarea');
     if (!el) return false;
     const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-    setter.call(el, ${JSON.stringify('想找两个也喜欢《夜航的信》和星野回声的人一起候场，交流慢热一点，只在公开场合见面。')});
+    setter.call(el, ${JSON.stringify('想找两个也喜欢《烟花》的人一起候场，交流慢热一点，只在公开场合见面。')});
     el.dispatchEvent(new Event('input', { bubbles: true }));
     return true;
   })()`)

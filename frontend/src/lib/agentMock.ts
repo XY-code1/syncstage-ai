@@ -629,7 +629,7 @@ const CLOSING: Record<string, string> = {
   low: '共同点不算多，如果对方的理由打动了你也可以聊聊看。',
 }
 
-const PREFERRED = ['expected', 'intent_song', 'purpose', 'artist', 'recent', 'tag', 'safety']
+const PREFERRED = ['expected', 'intent_song', 'purpose', 'song', 'recent', 'mood', 'listening_time', 'tag', 'artist', 'safety']
 
 /** 只引用 evidence 里真实存在的共同点，引用校验不通过就退化成短句 */
 export function reasonFor(item: ScoredCandidate): string {
@@ -642,7 +642,7 @@ export function reasonFor(item: ScoredCandidate): string {
   })
   const parts = [ordered[0].text]
   for (const entry of ordered.slice(1)) {
-    if (['song', 'expected', 'intent_song', 'purpose'].includes(entry.kind)) parts.push(entry.text)
+    if (['song', 'expected', 'intent_song', 'purpose', 'recent', 'mood', 'listening_time'].includes(entry.kind)) parts.push(entry.text)
     if (parts.length >= 3) break
   }
   let reason = parts.join('；') + '。' + (CLOSING[item.band] ?? CLOSING.low)
@@ -676,6 +676,7 @@ export function inviteState(state: AgentState, candidateId: string): AgentState 
   const pending: PendingConfirmation = {
     required: true,
     status: 'awaiting_peer',
+    inviteId: `demo-invite-${state.sessionId}-${candidateId}`,
     candidateId,
     proposerConfirmed: true,
     peerConfirmed: false,

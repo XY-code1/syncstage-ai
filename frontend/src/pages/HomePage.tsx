@@ -33,7 +33,7 @@ export function HomePage() {
           : confirmationStatus === 'accepted' || confirmationStatus === 'confirmed'
             ? '双方已确认，可进入同行房间'
             : '同频匹配结果已就绪'
-  const sharedSong = useMemo(() => agent?.rankedCandidates[0]?.sharedSongs[0] ?? concert?.hotSongs[0] ?? '夜航的信', [agent, concert])
+  const sharedSong = useMemo(() => agent?.rankedCandidates[0]?.sharedSongs[0] ?? '', [agent])
   const eventId = agent?.eventId ?? concert?.id ?? concertId ?? 'night-flight'
   // 与演出详情页 / 音乐授权页保持一致：只要这一场的音乐数据已授权（无论来自会话还是本机流程记录），
   // 直接回到任务确认页；否则先去演出详情页补授权。
@@ -52,7 +52,7 @@ export function HomePage() {
   }
 
   return <div className='relative min-h-[calc(100dvh-72px)] overflow-hidden bg-[#020706] text-white'>
-    <img src='/concert-crowd-bg.png' alt='' className='pointer-events-none absolute inset-0 h-full w-full object-cover object-center opacity-70'/>
+    <img src={`${import.meta.env.BASE_URL}concert-crowd-bg.png`} alt='' className='pointer-events-none absolute inset-0 h-full w-full object-cover object-center opacity-70'/>
     <div className='pointer-events-none absolute inset-0 bg-gradient-to-b from-[#020706]/35 via-[#020706]/25 to-[#020706]'/>
     <header className='relative z-10 flex h-[68px] items-center gap-2 px-5 pt-2'>
       <span className='flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-sm font-black text-[#04110b]'>♪</span>

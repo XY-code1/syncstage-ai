@@ -58,7 +58,7 @@ def main() -> int:
         'hot_songs': list(concert.get('hot_songs') or []),
         'meeting_point': meeting_point,
     }
-    shared_songs = [song for song in (concert.get('hot_songs') or []) if song == '夜航的信'][:1]
+    shared_songs = [song for song in (concert.get('hot_songs') or []) if song == '北京昨夜下了雪'][:1]
     payload = {
         'roomId': ROOM_ID,
         'concertId': CONCERT_ID,
@@ -86,3 +86,4 @@ def main() -> int:
 
 if __name__ == '__main__':
     sys.exit(main())
+

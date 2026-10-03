@@ -15,7 +15,7 @@ import { useExitToFrequency } from '../hooks/useExitToFrequency'
 const AGE_BANDS = ['', '18-22', '23-26', '27-30', '31+']
 
 const EXAMPLES = [
-  '想找两个也喜欢《夜航的信》的人一起候场，只在公开场合见面。',
+  '想找两个也喜欢《烟花》的人一起候场，只在公开场合见面。',
   '我一个人去看，想找个同样是女生、能安静听完整场的人结伴入场。',
 ]
 
@@ -152,7 +152,7 @@ export function IntentPage() {
               onChange={(event) => setText(event.target.value)}
               rows={5}
               maxLength={220}
-              placeholder='例如：想找两个也喜欢《夜航的信》的人一起候场，只在公开场合见面。'
+              placeholder='例如：想找两个也喜欢《烟花》的人一起候场，只在公开场合见面。'
               className='w-full resize-none rounded-card bg-transparent px-4 py-3.5 text-[14px] leading-relaxed text-ink-100 outline-none placeholder:text-white/25'
             />
             <div className='flex items-center justify-between border-t border-white/6 px-4 py-2.5'>
