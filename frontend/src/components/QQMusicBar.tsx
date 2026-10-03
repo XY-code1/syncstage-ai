@@ -29,19 +29,19 @@ export function QQMusicBar({
         <span className='ml-auto text-[10px] text-white/35'>非官方页面</span>
       </div>
 
-      <div className='mt-2 flex items-center gap-3 px-4 pb-3'>
+      <div className='mt-1 flex min-h-[52px] items-center gap-3 px-4 pb-2'>
         {onBack ? (
           <button
             type='button'
             onClick={onBack}
             aria-label='返回'
-            className='-ml-1 rounded-full border border-white/10 px-2 py-1 text-[13px] text-white/75 transition hover:border-white/25 hover:text-white'
+            className='-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-[28px] leading-none text-white/80 transition hover:bg-white/5 hover:text-white'
           >
             ‹
           </button>
         ) : null}
         <div className='min-w-0 flex-1'>
-          <p className='truncate text-[15px] font-semibold text-white'>{title}</p>
+          <p className='truncate text-[16px] font-semibold text-white'>{title}</p>
           {subtitle ? <p className='truncate text-[11px] text-white/45'>{subtitle}</p> : null}
         </div>
         {right}

@@ -40,6 +40,7 @@ export function AgentProgressPage() {
     agentStarting,
     agentError,
     runAgent,
+    pauseAgent,
     cancelAgent,
     judgeMode,
     agentMode,
@@ -51,6 +52,7 @@ export function AgentProgressPage() {
   const ranHere = useRef(false)
   const jumpedRef = useRef<string | null>(null)
   const active = agentRunning || agentStarting
+  const paused = Boolean(agent?.status === 'running' && !active)
 
   const trace = agent?.trace ?? []
   const stages = useMemo(() => syncStagesOf(trace), [trace])
@@ -68,6 +70,11 @@ export function AgentProgressPage() {
   const settled = Boolean(agent) && !active
   const merged = settled && agent?.status === 'pending_confirmation' && Boolean(agent?.rankedCandidates.length)
   const top = agent?.rankedCandidates[0] ?? null
+  const browsedCount = new Set([
+    ...(agent?.candidateIds ?? []),
+    ...(agent?.excludedCandidates ?? []).map((item) => item.userId),
+  ]).size
+  const filteredCount = agent?.excludedCandidates.length ?? 0
   const exitToFrequency = useExitToFrequency(cancelAgent)
 
   // 匹配阶段过渡：进度条与「正在跑的那一个」阶段点交给 GSAP，位置仍然来自真实 stage 状态。
@@ -195,7 +202,7 @@ export function AgentProgressPage() {
       <main className='relative flex-1 overflow-hidden px-4 pb-6 pt-2'>
         <img src='/concert-crowd-bg.png' alt='' className='pointer-events-none absolute inset-0 h-full w-full object-cover object-bottom opacity-35'/>
         <div className='pointer-events-none absolute inset-0 bg-gradient-to-b from-stage-950 via-stage-950/75 to-stage-950/55'/>
-        <section className='relative'>
+        <section className={failed || agent?.status === 'error' ? 'hidden' : 'relative'}>
           <div data-visual='dual-track' data-track-state={merged ? 'merged' : 'converging'} data-track-progress={stageRatio} className='relative mx-auto h-[342px] w-[342px]'>
             {[0,1,2].map((ring) => <span key={ring} className='absolute rounded-full border border-brand-300/15' style={{inset:18 + ring * 31}}/>)}
             <span className='absolute inset-[38px] rounded-full border border-brand-300/35 shadow-[0_0_54px_rgba(49,245,138,.18)]'/>
@@ -210,8 +217,15 @@ export function AgentProgressPage() {
           </div>
 
           <div className='relative -mt-3 px-4 pb-1 text-center'>
-            <p className='text-[22px] font-bold leading-snug text-white'>{active ? `正在${currentStage?.label ?? '理解你的期待'}…` : headline}</p>
-            <p className='mt-1.5 text-sm leading-relaxed text-ink-300'>{sentence}</p>
+            <p className='text-[22px] font-bold leading-snug text-white'>{paused ? '任务已暂停' : active ? `正在${currentStage?.label ?? '理解你的期待'}…` : headline}</p>
+            <p className='mt-1.5 text-[15px] leading-relaxed text-ink-300'>{paused ? '已完成的工具轨迹仍保留；继续时沿用当前授权与条件' : sentence}</p>
+            <div className='mt-3 flex items-center justify-center gap-2 text-[13px] text-white/55'>
+              <span>已浏览 <b className='text-brand-300'>{browsedCount}</b> 人</span>
+              <span className='text-white/20'>·</span>
+              <span>已筛除 <b className='text-white/80'>{filteredCount}</b> 人</span>
+              <span className='text-white/20'>·</span>
+              <span className='max-w-[128px] truncate'>{paused ? '等待继续' : currentStage?.label ?? '准备执行'}</span>
+            </div>
           </div>
 
           {/* 五个阶段用一条极简进度表示：两轨之间的共同音符才是主体；没有任务在跑时不占空间 */}
@@ -259,11 +273,15 @@ export function AgentProgressPage() {
             {displayStages.map((item, index) => <div key={item.label} className={`rounded-2xl border px-3 py-2.5 text-sm ${item.source?.state === 'done' ? 'border-brand-400/30 bg-brand-400/10 text-brand-200' : active && index === displayStages.findIndex((entry) => entry.source?.state !== 'done') ? 'border-brand-400/45 bg-black/55 text-white' : 'border-white/8 bg-black/30 text-white/45'}`}><span className='mr-2'>{item.source?.state === 'done' ? '✓' : index + 1}</span>{item.label}</div>)}
           </div>
 
-          {active ? (
-            <div className='pb-2 text-center'>
-              <button type='button' onClick={exitToFrequency} className='mt-3 min-h-11 rounded-full border border-white/15 px-6 text-sm text-white/65'>
-                ×　取消匹配
-              </button>
+          {active || paused ? (
+            <div className='pb-2 pt-3 text-center'>
+              <Button full size='lg' onClick={() => paused ? void runAgent() : pauseAgent()}>
+                {paused ? '继续寻找' : '暂停寻找'}
+              </Button>
+              <div className='mt-1 grid grid-cols-2 gap-1'>
+                <button type='button' onClick={() => { cancelAgent(); navigate(`/concert/${concertId}/task`) }} className='min-h-11 text-[14px] text-white/65'>修改条件</button>
+                <button type='button' onClick={exitToFrequency} className='min-h-11 text-[14px] text-white/65'>结束任务</button>
+              </div>
             </div>
           ) : null}
         </section>

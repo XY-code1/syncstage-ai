@@ -158,6 +158,8 @@ interface SessionContextValue {
   /** 非空表示 live 模式但后端没有可用大模型配置，页面据此展示「尚未配置大模型服务」。 */
   agentNotConfigured: string
   runAgent: (options?: { text?: string; intent?: ParsedIntent | null }) => Promise<AgentState | null>
+  /** 暂停当前前端任务：中止请求但保留已完成轨迹；继续时从同一条件重新执行。 */
+  pauseAgent: () => void
   /** 用户主动取消当前匹配：中止任务并回到可恢复的「还没有开始匹配」状态。 */
   cancelAgent: () => void
   peerViewed: boolean
@@ -455,6 +457,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             )
           },
         })
+        if (activeRunId.current !== runId) return null
         update(() => ({ agent: next }))
         // live 模式下如果有步骤回退到本地规则，必须显式说出来，不能让它看起来像模型输出
         const liveFallback = mode === 'live'
@@ -513,6 +516,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setAgentRunId(null)
     update(() => ({ agent: null }))
   }, [update])
+
+  const pauseAgent = useCallback(() => {
+    runController.current?.abort()
+    runController.current = null
+    activeRunId.current = null
+    setAgentStarting(false)
+    setAgentRunning(false)
+    setAgentRunId(null)
+    pushToast('已暂停；继续时会沿用当前条件重新执行', 'warn')
+  }, [pushToast])
 
   // ------------------------------------------------------------ 双向确认
   const invite = useCallback(
@@ -813,6 +826,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       agentRunId,
       agentNotConfigured,
       runAgent,
+      pauseAgent,
       cancelAgent,
       peerViewed: state.peerViewed,
       invite,
@@ -871,6 +885,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       resetAll,
       roomError,
       runAgent,
+      pauseAgent,
       cancelAgent,
       saveParsedIntent,
       savePrefs,

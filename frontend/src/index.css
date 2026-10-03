@@ -36,6 +36,12 @@
   --color-stageblue-500: #4a7dff;
   --color-vibepurple-500: #825cff;
 
+  /* 双轨身份色：当前用户固定为绿，候选人固定为紫 */
+  --color-self: #31f58a;
+  --color-peer: #8b6cff;
+  --color-stage-bg: #020706;
+  --color-stage-panel: #08110f;
+
   --color-warm-400: #ffc46b;
   --color-warm-500: #f5a742;
   --color-violet-400: #9b8cff;
@@ -60,11 +66,12 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -webkit-tap-highlight-color: transparent;
-    font-size: 14px;
+    font-size: 15px;
   }
 
   button {
     font-family: inherit;
+    touch-action: manipulation;
   }
 
   ::selection {

@@ -457,6 +457,12 @@ try {
   check(await fitsScreens(1.05), '⑤ 匹配中控制在一个主屏内')
   await capture('04a-agent-running.png')
 
+  await clickText('暂停寻找')
+  check(await waitForText('任务已暂停', 5000), '⑤ 用户可以暂停 Agent，已完成轨迹保留')
+  check((await bodyText()).includes('修改条件') && (await bodyText()).includes('结束任务'), '⑤ 暂停后可修改条件或结束任务')
+  await clickText('继续寻找')
+  check(await waitForText('暂停寻找', 5000), '⑤ 用户可以沿用当前条件继续执行')
+
   // 每完成一步，两轨之间就亮起一个共同音符；两条轨道随真实阶段持续靠近
   const advancing = await (async () => {
     const deadline = Date.now() + 15000
