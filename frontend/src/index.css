@@ -1,5 +1,9 @@
 @import 'tailwindcss';
 
+@keyframes songSnow { 0% { transform: translate3d(0,-18px,0); opacity:.15 } 50% { opacity:.8 } 100% { transform: translate3d(8px,70px,0); opacity:0 } }
+@keyframes songBurst { 0%,35% { transform: scale(.2); opacity:.15 } 70% { transform: scale(2.4); opacity:.9 } 100% { transform: scale(3.4); opacity:0 } }
+@keyframes songScan { 0% { transform: translate3d(-50px,0,0) scaleX(.3); opacity:0 } 45% { opacity:.8 } 100% { transform: translate3d(80px,0,0) scaleX(1.4); opacity:0 } }
+
 @theme {
   --font-sans: 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', 'Noto Sans SC', system-ui,
     -apple-system, 'Segoe UI', sans-serif;

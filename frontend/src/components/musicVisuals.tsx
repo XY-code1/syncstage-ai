@@ -23,12 +23,15 @@ export function Vinyl({
   accent = SIGNAL_GREEN,
   spin = false,
   fast = false,
+  sizeCss,
   className,
 }: {
   size?: number
   accent?: string
   spin?: boolean
   fast?: boolean
+  /** 覆盖 width/height（例如 clamp()）；size 只用于推导纹路与中心孔的像素值。 */
+  sizeCss?: string
   className?: string
 }) {
   const root = useRef<HTMLSpanElement>(null)
@@ -55,8 +58,8 @@ export function Vinyl({
       ref={root}
       className={cn('relative block shrink-0 rounded-full', spin && 'gsap-transform', className)}
       style={{
-        width: size,
-        height: size,
+        width: sizeCss ?? size,
+        height: sizeCss ?? size,
         background: `radial-gradient(circle at 50% 50%, #05070a 0%, #15191c 58%, #0b0d0f 100%)`,
         boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.10), inset 0 0 0 ${Math.max(2, size * 0.06)}px rgba(255,255,255,0.03)`,
       }}

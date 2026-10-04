@@ -507,6 +507,8 @@ export interface FrequencyParticleSceneProps {
   rightAvatar?: string
   leftName?: string
   rightName?: string
+  /** stage = 完整舞台（中央唱片 + 头像 + 声波）；ambient = 只做页面背景粒子。 */
+  variant?: 'stage' | 'ambient'
 }
 
 export function FrequencyParticleScene({
@@ -519,7 +521,9 @@ export function FrequencyParticleScene({
   rightAvatar,
   leftName = '你',
   rightName = '同频听众',
+  variant = 'stage',
 }: FrequencyParticleSceneProps) {
+  const ambient = variant === 'ambient'
   const viewport = useThree((state) => state.viewport)
   const invalidate = useThree((state) => state.invalidate)
   const budget = BUDGET[tier]
@@ -659,7 +663,7 @@ export function FrequencyParticleScene({
     const surge = d.surge
 
     uniforms.backdrop.uTime.value = d.t
-    uniforms.backdrop.uEnergy.value = d.energy
+    uniforms.backdrop.uEnergy.value = ambient ? d.energy * 0.5 : d.energy
     uniforms.vinyl.uTime.value = d.t
     uniforms.vinyl.uEnergy.value = d.energy
     uniforms.vinyl.uAccent.value.copy(d.connection > 0.5 ? MINT : GREEN)
@@ -724,6 +728,7 @@ export function FrequencyParticleScene({
         />
       </mesh>
 
+      {ambient ? null : (
       <group scale={fit}>
         {/* 呼吸光 */}
         <GlowQuad uniforms={uniforms.halo} size={CORE_R * 5.2} position={[0, CORE_Y, -0.8]} />
@@ -801,6 +806,7 @@ export function FrequencyParticleScene({
         <AvatarOrb position={[-AVATAR_X, AVATAR_Y, 0]} size={AVATAR_SIZE} src={leftAvatar} name={leftName} from='#31f58a' to='#0d6b45' />
         <AvatarOrb position={[AVATAR_X, AVATAR_Y, 0]} size={AVATAR_SIZE} src={rightAvatar} name={rightName} from='#8b6cff' to='#2a1a5e' />
       </group>
+      )}
     </>
   )
 }

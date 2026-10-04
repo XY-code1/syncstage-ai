@@ -339,6 +339,8 @@ try {
   check(await waitForText('一起去现场'), '① 首页标题可见')
   check(await waitForText('近期演出'), '① 首页保留真实演出入口')
   check(await waitForText('夜航计划'), '① 首页至少显示一场演出')
+  check(!(await hasElement('[data-music-control]')), '① 页面打开时不出现音乐浮层（不自动播放）')
+  check((await evaluate("document.querySelectorAll('audio,video').length")) === 0, '① 页面打开时不创建 audio/video 元素')
   const navLabels = ['首页', '同频', '消息', '我的']
   const navText = await evaluate(`(() => { const nav = document.querySelector('nav[aria-label=主导航]'); return nav ? nav.innerText : '' })()`)
   for (const label of navLabels) {
@@ -357,7 +359,7 @@ try {
   check(await waitForElement('[data-visual=dual-track]'), '① 首屏使用双轨声波主视觉')
   check((await dualTrackState()) === 'apart', '① 首屏双轨状态是「尚未汇合」')
   check(await tapTargetsOk(), '① 首页主点击区高度合格')
-  check(await mobileButtonVisible('开始找同频搭子'), '① 首页主按钮无遮挡')
+  check(await mobileButtonVisible('发出我的同频信号'), '① 首页主按钮无遮挡')
   await send('Emulation.setDeviceMetricsOverride', { width: 430, height: 932, deviceScaleFactor: 1, mobile: true })
   await sleep(300)
   check(await evaluate('document.querySelector("h1")?.getBoundingClientRect().bottom < innerHeight'), '① 430×932 Hero 主标题位于首屏')
@@ -379,16 +381,35 @@ try {
   check((await dualTrackState()) === 'apart', '① 减少动效下仍保留静态双轨状态')
   await send('Emulation.setEmulatedMedia', { features: [] })
   await sleep(250)
+  await goto('/concert/night-flight/song')
+  check(await waitForText('哪首歌最像今晚的你？', 10000), '① 三首歌选择页可访问')
+  check(await waitForText('北京昨夜下了雪'), '① 默认展示已授权本地歌曲')
+  check(await hasElement('[data-demo-music-player][data-playback-mode="local"]'), '① 本地音频开关开启时显示播放控件')
+  check(await noHorizontalOverflow(), '① 三首歌页 390×844 无横向溢出')
+  check(await mobileButtonVisible('就用这首寻找'), '① 选歌页主按钮无遮挡')
+  await clickText('▶')
+  const localPlaybackStarted = await waitForElement('[aria-label="暂停"]', 10000)
+  if (localPlaybackStarted) await clickText('Ⅱ')
+  else skip('① 本地音频解码', 'Headless Chrome 未启用音频输出，真机试听在本地 Demo 验收')
+  await evaluate(`document.querySelector('[aria-label="下一首"]')?.click()`)
+  check(await waitForText('烟花', 5000), '① 切歌后曲目与视觉主题同步更新')
+  await goto('/')
+  await waitForText('夜航计划', 10000)
   await clickText('夜航计划')
-  check(await waitForText('AI找同行'), '① 点击演出进入独立详情路由')
+  check(await waitForText('进入夜航现场'), '① 点击演出进入独立详情路由')
   check((await currentHash()).includes('/concert/night-flight'), '① 演出详情路由正确')
-  check(await mobileButtonVisible('AI找同行'), '① 移动端主入口按钮无遮挡')
+  check(await mobileButtonVisible('进入夜航现场'), '① 移动端主入口按钮无遮挡')
+  check((await bodyText()).split('夜航计划').length - 1 <= 2, '① 详情页标题不再重复堆叠')
+  check(await hasElement('[data-concert-hero] img'), '① 主视觉使用全幅现场背景图')
   check(await waitForText('概念功能 Demo'), '① 全站只在顶部保留一个概念 Demo 标签')
   check(!(await bodyText()).includes('本作品为参赛概念Demo'), '① 详情页不再重复 Demo 声明')
   await capture('01-concert-detail.png')
 
   step('② 音乐数据授权：单屏紧凑列表 + 逐项说明')
-  await clickText('AI找同行')
+  await clickText('进入夜航现场')
+  check(await waitForElement('[data-music-control]'), '② 进入现场后右上角出现音乐控制')
+  check(await hasElement('[data-music-control] [aria-label="静音"]'), '② 音乐控制提供静音按钮')
+  check(await hasElement('[data-music-control] [aria-label="播放音乐"]') || await hasElement('[data-music-control] [aria-label="暂停音乐"]'), '② 音乐控制提供播放/暂停按钮')
   check(await waitForText('选择要授权的音乐数据'), '② 进入音乐数据授权页')
   check(await fitsScreens(1.05), '② 授权页在一屏内读完，不再堆叠五张大卡片')
   await clickText('暂不授权')
@@ -467,6 +488,19 @@ try {
   check(!(await bodyText()).includes('parse_social_intent'), '⑤ 一级匹配页不铺工具调用日志')
   check(!/provider|token|fallback|\d+ ms/.test(await bodyText()), '⑤ 一级匹配页不出现技术参数')
   check(await fitsScreens(1.05), '⑤ 匹配中控制在一个主屏内')
+  check(await evaluate(`(() => {
+    const rect = (selector) => { const el = document.querySelector(selector); return el ? el.getBoundingClientRect() : null }
+    const rows = [rect('main h1'), rect('[aria-label="匹配阶段"]'), rect('main button')].filter(Boolean)
+    for (let i = 0; i < rows.length; i += 1) {
+      for (let j = i + 1; j < rows.length; j += 1) {
+        const a = rows[i]; const b = rows[j]
+        if (a.bottom <= b.top + 1 || b.bottom <= a.top + 1) continue
+        if (a.right <= b.left + 1 || b.right <= a.left + 1) continue
+        return false
+      }
+    }
+    return true
+  })()`), '⑤ 标题 / 进度 / 主按钮互不重叠')
   await capture('04a-agent-running.png')
 
   await clickText('暂停寻找')
@@ -789,7 +823,9 @@ try {
   await goto('/concert/night-flight/matches')
   check(await waitForText('综合匹配度', 20000), '⑮ 刷新后匹配结果仍能恢复')
   await goto('/concert/night-flight')
-  check(await waitForText('回到同行方案'), '⑮ 刷新后演出详情页仍记得已有方案')
+  check(await waitForText('进入夜航现场'), '⑮ 刷新后演出详情页仍可用')
+  await clickText('进入夜航现场')
+  check((await currentHash()).includes('/matches'), '⑮ 已有方案时直接回到同行方案')
 
   // ============================================================ 评委模式与三个案例
   step('⑯ 评委演示模式：工具轨迹在二级页面')
@@ -1244,8 +1280,8 @@ try {
   await goto('/')
   await sleep(700)
   check(!(await currentHash()).includes('/reveal') && !(await currentHash()).includes('/matches'), '㊱ 刷新后不恢复已撤回邀请的旧结果页')
-  check(await waitForText('找同频搭子', 10000), '㊱ 刷新后仍提供寻找入口')
-  await clickText('找同频搭子')
+  check(await waitForText('发出我的同频信号', 10000), '㊱ 刷新后仍提供寻找入口')
+  await clickText('发出我的同频信号')
   await sleep(900)
   check((await currentHash()).includes('/task') || (await currentHash()).includes('/concert/night-flight'), '㊱ 刷新后可继续进入匹配流程')
 
@@ -1313,7 +1349,7 @@ try {
     for (const dir of ['public', 'src']) {
       if (!existsSync(dir)) continue
       for (const entry of readdirSync(dir, { recursive: true })) {
-        if (/\.(mp3|m4a|flac|wav|aac|ogg|ape|wma|mp4)$/i.test(String(entry))) hits.push(dir + '/' + String(entry))
+        if (/\.(mp3|m4a|flac|wav|aac|ogg|ape|wma|mp4)$/i.test(String(entry)) && !String(entry).includes('demo-audio-local')) hits.push(dir + '/' + String(entry))
       }
     }
     return hits
@@ -1338,11 +1374,12 @@ try {
   check(playlistRevealText.includes('赛事Demo模拟数据'), '㊵ 说明音乐来源与 Demo 用途')
   check((await evaluate("document.querySelectorAll('audio,video').length")) === 0, '㊵ 不自动播放音乐')
 
-  check(await hasElement('[data-demo-music-player][data-playback-mode="official-link"]'), '播放器未配置 localSrc 时降级为官方跳转')
-  check(!(await hasElement('[data-demo-music-player] [aria-label="播放"]')), '无 localSrc 时不显示失效播放按钮')
+  const publicFallback = await hasElement('[data-demo-music-player][data-playback-mode="official-link"]')
+  check(publicFallback || await hasElement('[data-demo-music-player][data-playback-mode="local"]'), '播放器根据环境开关选择本地或官方跳转模式')
+  check(!publicFallback || !(await hasElement('[data-demo-music-player] [aria-label="播放"]')), '无 localSrc 时不显示失效播放按钮')
   const audioFallback = await evaluate(`(() => { const el = document.querySelector('[data-official-audio-fallback]'); return el ? { href: el.getAttribute('href'), target: el.getAttribute('target'), rel: el.getAttribute('rel') } : null })()`)
-  check(Boolean(audioFallback) && audioFallback.href === OFFICIAL_URL, '无本地音源时指向官方歌单总链接')
-  check(Boolean(audioFallback) && audioFallback.target === '_blank' && String(audioFallback.rel).includes('noopener'), '播放降级链接使用安全跳转')
+  check(!publicFallback || (Boolean(audioFallback) && audioFallback.href === OFFICIAL_URL), '无本地音源时指向官方歌单总链接')
+  check(!publicFallback || (Boolean(audioFallback) && audioFallback.target === '_blank' && String(audioFallback.rel).includes('noopener')), '播放降级链接使用安全跳转')
   const musicSignalIds = await evaluate(`(() => { const raw = sessionStorage.getItem('sfl.session.v2'); if (!raw) return null; const s = JSON.parse(raw); const item = (s.agent && s.agent.rankedCandidates && s.agent.rankedCandidates[0]) || null; return item && item.scoreBreakdown && item.scoreBreakdown.musicSignals ? item.scoreBreakdown.musicSignals.map((x) => x.id) : null })()`)
   check(
     Array.isArray(musicSignalIds) && ['favorite', 'recent', 'mood', 'listening_time'].every((id) => musicSignalIds.includes(id)),

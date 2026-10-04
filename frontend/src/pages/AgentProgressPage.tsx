@@ -4,23 +4,19 @@ import { AgentEvidenceBody } from '../components/AgentEvidence'
 import { QQMusicBar } from '../components/QQMusicBar'
 import { Button, DemoBadge, StateView } from '../components/ui'
 import { ChevronDownIcon, DiscIcon, SparkleIcon } from '../components/icons'
-import {
-  CANDIDATE_TRACK,
-  USER_TRACK,
-  Vinyl,
-  WaveformBars,
-  type TrackPerson,
-} from '../components/musicVisuals'
+import { CANDIDATE_TRACK, USER_TRACK, Vinyl, type TrackPerson } from '../components/musicVisuals'
 import { Avatar } from '../components/Avatar'
 import { cn } from '../lib/cn'
 import { MOTION_OK, MOTION_REDUCE, gsap, useGSAP } from '../lib/gsapSetup'
 import { SYNC_STAGES, syncStagesOf } from '../lib/agentMock'
 import { useProfile } from '../store/profile'
 import { useSession } from '../store/session'
+import { useMusicPlayer } from '../components/music/DemoMusicPlayer'
+import { localDemoAudioByKey } from '../data/localDemoAudioManifest'
 import { useExitToFrequency } from '../hooks/useExitToFrequency'
 import type { ParticleStageStatus } from '../components/visuals/particleStageTypes'
 
-// 粒子舞台含 three.js，走懒加载：不进首屏主包，也不阻塞首屏渲染。
+// 粒子舞台走 three.js，懒加载：不进入首屏主包，也不阻塞首屏渲染。
 const FrequencyParticleStage = lazy(() => import('../components/visuals/FrequencyParticleStage'))
 
 /** 执行阶段 → 粒子舞台状态：相邻阶段不会停在同一个视觉状态上。 */
@@ -36,15 +32,21 @@ const STAGE_VISUAL: Record<string, ParticleStageStatus> = {
 const MERGE_HOLD_MS = 800
 
 /**
- * Agent 匹配页（双轨版本）。
+ * Agent 匹配项（Tara 寻找同频者）。
  *
- * 页面主体只有一件事：两条代表两个陌生人的音乐轨道，跟着后端真实进度逐渐靠近；
- * 每完成一个阶段，两轨之间就亮起一个共同音符，最后一个阶段完成后两轨汇合。
- * 页面上只保留一句当前状态与一条简短进度；工具名 / 耗时 / fallback / provider
- * 全部收进「查看 Agent 工作过程」，普通界面不显示。
- * 动画完全由后端运行状态驱动：没有任务在跑就不会有流动或收束。
+ * 结构上只做一件事：把「当前歌曲 → 唱片主视觉 → 搜索标题 → 三项数据 → 四阶段进度 →
+ * 暂停 → 修改条件 / 结束任务」按正常文档流竖着排下来。
+ *
+ * 硬约束：
+ * - 页面只有一个视觉中心（中央唱片），粒子 Canvas 只当背景层（z-0、不拦点击）；
+ * - 除头像与粒子外，标题 / 统计 / 进度 / 按钮一律不使用 absolute 定位，
+ *   不再靠叠 z-index 掩盖重叠；
+ * - 内容层不依赖任何固定高度，390×844 与更矮的屏幕都是自然滚动；
+ * - 逐段间距 ≥ 20px，底部留 safe-area-inset-bottom。
  */
 export function AgentProgressPage() {
+  const musicPlayer = useMusicPlayer()
+  const selectedTrack = localDemoAudioByKey(musicPlayer.selectedTrackId)
   const { concertId = 'night-flight' } = useParams()
   const navigate = useNavigate()
   const {
@@ -106,37 +108,13 @@ export function AgentProgressPage() {
     return Math.min(1, (doneCount + 0.35) / stages.length)
   }, [active, doneCount, merged, stages.length])
 
-  // 匹配阶段过渡：进度条与「正在跑的那一个」阶段点交给 GSAP，位置仍然来自真实 stage 状态。
-  const stageRow = useRef<HTMLDivElement>(null)
-  const progressBar = useRef<HTMLSpanElement>(null)
-  const pulsedDot = useRef<HTMLElement | null>(null)
   const stageRatio = stages.length <= 1 ? 0 : doneCount / (stages.length - 1)
-  const prevStageRatio = useRef(stageRatio)
 
-  useGSAP(() => {
-    const bar = progressBar.current
-    const from = prevStageRatio.current
-    prevStageRatio.current = stageRatio
-    if (!bar) return
-    const mm = gsap.matchMedia()
-    mm.add(MOTION_OK, () => {
-      // 只做 scaleX（transform），不逐帧改 width
-      const tween = gsap.fromTo(
-        bar,
-        { scaleX: from },
-        { scaleX: stageRatio, duration: 0.6, ease: 'power2.out', transformOrigin: 'left center' },
-      )
-      return () => tween.kill()
-    })
-    mm.add(MOTION_REDUCE, () => {
-      gsap.set(bar, { scaleX: stageRatio, transformOrigin: 'left center' })
-    })
-    return () => mm.revert()
-  }, { dependencies: [stageRatio], scope: stageRow })
-
+  // 当前阶段点：只做呼吸缩放，位置仍然来自真实 stage 状态。
+  const stageRow = useRef<HTMLDivElement>(null)
+  const pulsedDot = useRef<HTMLElement | null>(null)
   useGSAP(() => {
     const row = stageRow.current
-    // 上一个「当前阶段」点的缩放要清掉，否则换阶段后会残留放大状态
     if (pulsedDot.current) {
       gsap.set(pulsedDot.current, { clearProps: 'transform,opacity' })
       pulsedDot.current = null
@@ -153,6 +131,9 @@ export function AgentProgressPage() {
       )
       return () => tween.kill()
     })
+    mm.add(MOTION_REDUCE, () => {
+      gsap.set(node, { scale: 1, opacity: 1, transformOrigin: '50% 50%' })
+    })
     return () => mm.revert()
   }, { dependencies: [currentIndex, active], scope: stageRow })
 
@@ -163,6 +144,12 @@ export function AgentProgressPage() {
   const topPerson: TrackPerson = top
     ? { name: top.candidate.nickname, from: top.candidate.avatar.from, to: top.candidate.avatar.to }
     : { name: '待汇合', from: CANDIDATE_TRACK.from, to: CANDIDATE_TRACK.to }
+
+  // 搜索阶段继续播放用户自己选的那首歌（只有解锁过音频才会发声，绝不自动播放）。
+  useEffect(() => {
+    void musicPlayer.playSelected()
+  }, [])
+
   // 只有用户点击按钮才会运行；刷新 / 重进不会自动重跑（StrictMode 双调用也挡在这里）。
   useEffect(() => {
     if (active) ranHere.current = true
@@ -182,7 +169,7 @@ export function AgentProgressPage() {
   }, [active, agent, concertId, merged, navigate])
 
   const headline = active
-    ? currentStage?.label ?? '正在准备'
+    ? `正在${currentStage?.label ?? '理解你的期待'}…`
     : failed || agent?.status === 'error'
       ? '这次同频没有跑完'
       : agent?.status === 'no_match'
@@ -220,6 +207,8 @@ export function AgentProgressPage() {
     )
   }
 
+  const currentLabel = paused ? '等待继续' : currentStage?.label ?? '准备执行'
+
   return (
     <div className='flex min-h-screen flex-col'>
       <QQMusicBar
@@ -228,12 +217,25 @@ export function AgentProgressPage() {
         right={judgeMode ? <DemoBadge label='评委模式' /> : undefined}
       />
 
-      <main className='relative flex-1 overflow-hidden px-4 pb-6 pt-2'>
-        <img src={`${import.meta.env.BASE_URL}concert-crowd-bg.png`} alt='' className='pointer-events-none absolute inset-0 h-full w-full object-cover object-bottom opacity-35'/>
-        <div className='pointer-events-none absolute inset-0 bg-gradient-to-b from-stage-950 via-stage-950/75 to-stage-950/55'/>
-        {/* 粒子舞台：铺在状态信息后方，只做氛围层，不拦点击 */}
+      <main
+        className='relative flex-1 overflow-hidden px-4 pt-3'
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' }}
+      >
+        {/* 背景层：现场氛围图 + 暗色渐变，永远在内容之后 */}
+        <div className='pointer-events-none absolute inset-0 z-0' aria-hidden='true'>
+          <img
+            src={`${import.meta.env.BASE_URL}concert-crowd-bg.png`}
+            alt=''
+            className='h-full w-full object-cover object-bottom opacity-25'
+          />
+          <div className='absolute inset-0 bg-gradient-to-b from-stage-950 via-stage-950/80 to-stage-950/60' />
+        </div>
+
+        {/* 粒子 Canvas：只当背景，透明度降低约 40%，且不拦点击 */}
         <Suspense fallback={null}>
           <FrequencyParticleStage
+            variant='ambient'
+            className='z-0 opacity-60'
             status={stageStatus}
             progress={stageProgress}
             leftAvatar={profile.avatar ?? undefined}
@@ -241,173 +243,211 @@ export function AgentProgressPage() {
             rightName={top?.candidate.nickname ?? '同频听众'}
           />
         </Suspense>
-        <section className={failed || agent?.status === 'error' ? 'hidden' : 'relative'}>
-          <div data-visual='dual-track' data-track-state={merged ? 'merged' : 'converging'} data-track-progress={stageRatio} className='relative mx-auto h-[342px] w-[342px]'>
-            {[0,1,2].map((ring) => <span key={ring} className='absolute rounded-full border border-brand-300/15' style={{inset:18 + ring * 31}}/>)}
-            <span className='absolute inset-[38px] rounded-full border border-brand-300/35 shadow-[0_0_54px_rgba(49,245,138,.18)]'/>
-            <span className='absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'><Vinyl size={230} spin={active} accent={merged ? '#31f58a' : '#4a7dff'}/></span>
-            <span className='absolute left-[4px] top-[139px] z-10 rounded-full border border-brand-300/55 bg-stage-950 p-1'><Avatar name={me.name} from={me.from} to={me.to} src={me.src} size={52}/></span>
-            <span className='absolute right-[4px] top-[139px] z-10 rounded-full border border-vibepurple-400/60 bg-stage-950 p-1'><Avatar name={topPerson.name} from={topPerson.from} to={topPerson.to} size={52} silhouette={!top}/></span>
-            <WaveformBars bars={17} height={52} active={active} accent='#31f58a' className='absolute left-[54px] top-[147px] w-[92px] -rotate-6'/>
-            <WaveformBars bars={17} height={52} active={active} accent='#8769ff' className='absolute right-[54px] top-[147px] w-[92px] rotate-6'/>
-            <span className='absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full border border-brand-300/35 bg-black/55 px-3 py-1.5 text-sm text-brand-200'>理解你的期待</span>
-            <span className='absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-sm text-white/60'>对齐音乐偏好</span>
-            <span className='sr-only'>{Array.from({length:5}).map((_, index) => <i key={index} data-visual='track-bead' data-bead-state={stages[index]?.state ?? 'pending'}/>)}</span>
+
+        {/* 内容层：正常文档流竖排，不使用固定高度 */}
+        <div className='relative z-10 flex flex-col'>
+          {/* 1. 当前歌曲胶囊 */}
+          <p className='mx-auto max-w-full truncate rounded-full border border-white/10 bg-black/45 px-3 py-1 text-[12px] text-white/65'>
+            当前信号 · 《{selectedTrack.title}》
+          </p>
+
+          {/* 2. 唱片主视觉区：唯一视觉中心，双方头像固定在唱片左右 */}
+          <div
+            data-visual='dual-track'
+            data-track-state={merged ? 'merged' : active || paused ? 'converging' : 'apart'}
+            data-track-progress={stageRatio}
+            className='relative mx-auto mt-5 w-[clamp(220px,64vw,320px)]'
+          >
+            <span className='absolute left-0 top-1/2 z-20 -translate-y-1/2 rounded-full border border-brand-300/55 bg-stage-950 p-1'>
+              <Avatar name={me.name} from={me.from} to={me.to} src={me.src} size={48} />
+            </span>
+            <span className='absolute right-0 top-1/2 z-20 -translate-y-1/2 rounded-full border border-vibepurple-400/60 bg-stage-950 p-1'>
+              <Avatar name={topPerson.name} from={topPerson.from} to={topPerson.to} size={48} silhouette={!top} />
+            </span>
+
+            <div className='relative flex aspect-square w-full items-center justify-center'>
+              <span className='absolute inset-0 rounded-full border border-brand-300/15' />
+              <span className='absolute inset-[10%] rounded-full border border-brand-300/25 shadow-[0_0_54px_rgba(49,245,138,0.16)]' />
+              <Vinyl size={260} sizeCss='100%' spin={active} accent={merged ? '#31f58a' : '#4a7dff'} />
+            </div>
+
+            <span className='sr-only'>
+              {Array.from({ length: 5 }).map((_, index) => (
+                <i key={index} data-visual='track-bead' data-bead-state={stages[index]?.state ?? 'pending'} />
+              ))}
+            </span>
           </div>
 
-          <div className='relative -mt-3 px-4 pb-1 text-center'>
-            <p className='text-[22px] font-bold leading-snug text-white'>{paused ? '任务已暂停' : active ? `正在${currentStage?.label ?? '理解你的期待'}…` : headline}</p>
-            <p className='mt-1.5 text-[15px] leading-relaxed text-ink-300'>{paused ? '已完成的工具轨迹仍保留；继续时沿用当前授权与条件' : sentence}</p>
-            <div className='mt-3 flex items-center justify-center gap-2 text-[13px] text-white/55'>
-              <span>已浏览 <b className='text-brand-300'>{browsedCount}</b> 人</span>
+          {/* 3. 搜索标题 + 一句辅助文案（暗色渐变底，保证文字对比度） */}
+          <div className='mt-5 rounded-2xl bg-gradient-to-b from-stage-950/75 via-stage-950/60 to-stage-950/25 px-3 py-3 text-center'>
+            <h1 className='text-[21px] font-bold leading-snug text-white'>{paused ? '任务已暂停' : headline}</h1>
+            <p className='mx-auto mt-1.5 max-w-[300px] text-[14px] leading-relaxed text-ink-300'>
+              {paused ? '已完成的工具轨迹仍保留；继续时沿用当前授权与条件' : sentence}
+            </p>
+
+            {/* 4. 三项轻量数据 */}
+            <div className='mt-3 flex items-center justify-center gap-2.5 text-[13px] text-white/60'>
+              <span>
+                已浏览 <b className='text-brand-300'>{browsedCount}</b> 人
+              </span>
               <span className='text-white/20'>·</span>
-              <span>已筛除 <b className='text-white/80'>{filteredCount}</b> 人</span>
+              <span>
+                已筛除 <b className='text-white/85'>{filteredCount}</b> 人
+              </span>
               <span className='text-white/20'>·</span>
-              <span className='max-w-[128px] truncate'>{paused ? '等待继续' : currentStage?.label ?? '准备执行'}</span>
+              <span className='max-w-[104px] truncate'>{currentLabel}</span>
             </div>
           </div>
 
-          {/* 五个阶段用一条极简进度表示：两轨之间的共同音符才是主体；没有任务在跑时不占空间 */}
-          {active || merged ? (
-          <div
-            ref={stageRow}
-            className='relative mx-auto mb-3 mt-4 flex w-[252px] items-center justify-between'
-            aria-label='匹配阶段'
-          >
-            <span className='absolute inset-x-1 h-px bg-white/10' style={{ top: 'calc(50% - 0.5px)' }} />
-            <span
-              ref={progressBar}
-              data-visual='stage-progress'
-              className='absolute inset-x-1 h-px bg-brand-500/60'
-              style={{ top: 'calc(50% - 0.5px)' }}
-            />
-            {displayStages.map((item, index) => {
-              const done = item.source?.state === 'done'
-              const firstPending = displayStages.findIndex((entry) => entry.source?.state !== 'done')
-              const isCurrent = index === firstPending && active
-              return (
-                <span
-                  key={item.label}
-                  data-stage={item.label}
-                  data-stage-current={isCurrent ? '1' : '0'}
-                  aria-label={item.label}
-                  title={item.label}
-                  className={cn(
-                    'relative z-10 block rounded-full',
-                    done
-                      ? 'h-2.5 w-2.5 bg-brand-500'
-                      : item.source?.state === 'failed'
-                        ? 'h-2.5 w-2.5 bg-warm-400'
-                        : isCurrent
-                          ? 'h-2.5 w-2.5 bg-brand-400'
-                          : 'h-2 w-2 border border-white/25 bg-stage-950',
-                  )}
-                />
-              )
-            })}
-          </div>
+          {/* 5. 四阶段进度：真实 stage 状态驱动，全部在文档流里 */}
+          {active || paused || merged ? (
+            <div ref={stageRow} aria-label='匹配阶段' className='mt-4 flex items-start gap-1 px-1'>
+              {displayStages.map((item, index) => {
+                const done = item.source?.state === 'done'
+                const firstPending = displayStages.findIndex((entry) => entry.source?.state !== 'done')
+                const isCurrent = index === firstPending && active
+                return (
+                  <div
+                    key={item.label}
+                    data-stage={item.label}
+                    data-stage-current={isCurrent ? '1' : '0'}
+                    className='flex min-w-0 flex-1 flex-col items-center gap-1.5'
+                  >
+                    <span
+                      className={cn(
+                        'block rounded-full',
+                        done
+                          ? 'h-2.5 w-2.5 bg-brand-500'
+                          : item.source?.state === 'failed'
+                            ? 'h-2.5 w-2.5 bg-warm-400'
+                            : isCurrent
+                              ? 'h-2.5 w-2.5 bg-brand-400'
+                              : 'h-2 w-2 border border-white/25 bg-stage-950',
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        'text-center text-[10.5px] leading-tight',
+                        done ? 'text-brand-200' : isCurrent ? 'text-white' : 'text-white/45',
+                      )}
+                    >
+                      {item.label}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
           ) : null}
 
-          <div className='grid grid-cols-2 gap-2 px-1'>
-            {displayStages.map((item, index) => <div key={item.label} className={`rounded-2xl border px-3 py-2.5 text-sm ${item.source?.state === 'done' ? 'border-brand-400/30 bg-brand-400/10 text-brand-200' : active && index === displayStages.findIndex((entry) => entry.source?.state !== 'done') ? 'border-brand-400/45 bg-black/55 text-white' : 'border-white/8 bg-black/30 text-white/45'}`}><span className='mr-2'>{item.source?.state === 'done' ? '✓' : index + 1}</span>{item.label}</div>)}
-          </div>
-
+          {/* 6. 暂停 / 继续 */}
           {active || paused ? (
-            <div className='pb-2 pt-3 text-center'>
-              <Button full size='lg' onClick={() => paused ? void runAgent() : pauseAgent()}>
+            <div className='mt-4'>
+              <Button full size='lg' onClick={() => (paused ? void runAgent() : pauseAgent())}>
                 {paused ? '继续寻找' : '暂停寻找'}
               </Button>
-              <div className='mt-1 grid grid-cols-2 gap-1'>
-                <button type='button' onClick={() => { cancelAgent(); navigate(`/concert/${concertId}/task`) }} className='min-h-11 text-[14px] text-white/65'>修改条件</button>
-                <button type='button' onClick={exitToFrequency} className='min-h-11 text-[14px] text-white/65'>结束任务</button>
+              {/* 7. 修改条件 / 结束任务：与主按钮间隔 20px */}
+              <div className='mt-5 grid grid-cols-2 gap-1'>
+                <button
+                  type='button'
+                  onClick={() => {
+                    cancelAgent()
+                    navigate(`/concert/${concertId}/task`)
+                  }}
+                  className='min-h-11 text-[14px] text-white/65'
+                >
+                  修改条件
+                </button>
+                <button type='button' onClick={exitToFrequency} className='min-h-11 text-[14px] text-white/65'>
+                  结束任务
+                </button>
               </div>
             </div>
           ) : null}
-        </section>
 
-        {agent?.status === 'no_match' ? (
-          <div className='mt-3'>
-            <StateView
-              status='empty'
-              title='没有符合安全条件的同频搭子'
-              description='Agent 不会为了凑人数放宽你的硬条件，也不会编造候选人。'
-              actionLabel='去放宽条件'
-              onAction={() => navigate(`/concert/${concertId}/task`)}
-              secondaryLabel='查看 Agent 工作过程'
-              onSecondary={() => setWorkOpen(true)}
-            />
-          </div>
-        ) : null}
-
-        {failed || agent?.status === 'error' ? (
-          <div className='mt-3'>
-            <StateView
-              status='error'
-              title='这次同频中断了'
-              description={agentError || agent?.error || '网络或工具调用出现问题，可以重新运行'}
-              actionLabel='重新运行'
-              onAction={() => void runAgent()}
-              secondaryLabel='返回修改需求'
-              onSecondary={() => navigate(`/concert/${concertId}/task`)}
-            />
-          </div>
-        ) : null}
-
-        {!agent && !active ? (
-          <div className='mt-3'>
-            <StateView
-              status='info'
-              title='还没有开始匹配'
-              description='点击「开始匹配」后，Agent 才会读取你已授权的音乐画像并检索同场的人。'
-              actionLabel='开始匹配'
-              onAction={() => void runAgent()}
-              secondaryLabel='返回修改需求'
-              onSecondary={() => navigate(`/concert/${concertId}/task`)}
-            />
-          </div>
-        ) : null}
-
-        {merged ? (
-          <Button
-            className='mt-3 glow-cta'
-            full
-            size='lg'
-            icon={<SparkleIcon className='h-4 w-4' />}
-            onClick={() => navigate(`/concert/${concertId}/reveal`)}
-          >
-            查看同频汇合
-          </Button>
-        ) : null}
-
-        {/* 技术信息只有展开后才出现：工具调用、耗时、fallback、provider 都在这里 */}
-        <section className='soft-card mt-3 overflow-hidden'>
-          <button
-            type='button'
-            aria-expanded={workOpen}
-            onClick={() => setWorkOpen((prev) => !prev)}
-            className='flex min-h-11 w-full items-center gap-2 px-3.5 text-left'
-          >
-            <DiscIcon className='h-4 w-4 shrink-0 text-ink-400' />
-            <span className='min-w-0 flex-1 text-[13px] text-ink-100'>查看 Agent 工作过程</span>
-            <ChevronDownIcon className={cn('h-4 w-4 shrink-0 text-ink-400 transition', workOpen && 'rotate-180')} />
-          </button>
-          {workOpen ? (
-            <div className='border-t border-white/6 px-3.5 py-3'>
-              {agent ? (
-                <div className='flex flex-col gap-4'>
-                  <AgentEvidenceBody agent={agent} focus={top} stages={SYNC_STAGES} />
-                  <Button variant='ghost' size='sm' full onClick={() => navigate(`/concert/${concertId}/trace`)}>
-                    打开完整记录
-                  </Button>
-                </div>
-              ) : (
-                <p className='text-[12px] leading-relaxed text-ink-400'>
-                  任务开始后，这里会按顺序记录每一次工具调用与输入输出摘要。
-                </p>
-              )}
+          {agent?.status === 'no_match' ? (
+            <div className='mt-4'>
+              <StateView
+                status='empty'
+                title='没有符合安全条件的同频搭子'
+                description='Agent 不会为了凑人数放宽你的硬条件，也不会编造候选人。'
+                actionLabel='去放宽条件'
+                onAction={() => navigate(`/concert/${concertId}/task`)}
+                secondaryLabel='查看 Agent 工作过程'
+                onSecondary={() => setWorkOpen(true)}
+              />
             </div>
           ) : null}
-        </section>
+
+          {failed || agent?.status === 'error' ? (
+            <div className='mt-4'>
+              <StateView
+                status='error'
+                title='这次同频中断了'
+                description={agentError || agent?.error || '网络或工具调用出现问题，可以重新运行'}
+                actionLabel='重新运行'
+                onAction={() => void runAgent()}
+                secondaryLabel='返回修改需求'
+                onSecondary={() => navigate(`/concert/${concertId}/task`)}
+              />
+            </div>
+          ) : null}
+
+          {!agent && !active ? (
+            <div className='mt-4'>
+              <StateView
+                status='info'
+                title='还没有开始匹配'
+                description='点击「开始匹配」后，Agent 才会读取你已授权的音乐画像并检索同场的人。'
+                actionLabel='开始匹配'
+                onAction={() => void runAgent()}
+                secondaryLabel='返回修改需求'
+                onSecondary={() => navigate(`/concert/${concertId}/task`)}
+              />
+            </div>
+          ) : null}
+
+          {merged ? (
+            <Button
+              className='glow-cta mt-4'
+              full
+              size='lg'
+              icon={<SparkleIcon className='h-4 w-4' />}
+              onClick={() => navigate(`/concert/${concertId}/reveal`)}
+            >
+              查看同频汇合
+            </Button>
+          ) : null}
+
+          {/* 技术信息只有展开后才出现：工具调用、耗时、fallback、provider 都在这里 */}
+          <section className='soft-card mt-4 overflow-hidden'>
+            <button
+              type='button'
+              aria-expanded={workOpen}
+              onClick={() => setWorkOpen((prev) => !prev)}
+              className='flex min-h-11 w-full items-center gap-2 px-3.5 text-left'
+            >
+              <DiscIcon className='h-4 w-4 shrink-0 text-ink-400' />
+              <span className='min-w-0 flex-1 text-[13px] text-ink-100'>查看 Agent 工作过程</span>
+              <ChevronDownIcon className={cn('h-4 w-4 shrink-0 text-ink-400 transition', workOpen && 'rotate-180')} />
+            </button>
+            {workOpen ? (
+              <div className='border-t border-white/6 px-3.5 py-3'>
+                {agent ? (
+                  <div className='flex flex-col gap-4'>
+                    <AgentEvidenceBody agent={agent} focus={top} stages={SYNC_STAGES} />
+                    <Button variant='ghost' size='sm' full onClick={() => navigate(`/concert/${concertId}/trace`)}>
+                      打开完整记录
+                    </Button>
+                  </div>
+                ) : (
+                  <p className='text-[12px] leading-relaxed text-ink-400'>
+                    任务开始后，这里会按顺序记录每一次工具调用与输入输出摘要。
+                  </p>
+                )}
+              </div>
+            ) : null}
+          </section>
+        </div>
       </main>
     </div>
   )

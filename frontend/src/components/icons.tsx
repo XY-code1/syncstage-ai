@@ -375,3 +375,28 @@ export function WaveIcon({ className = base }: IconProps) {
     </svg>
   )
 }
+export function PlayIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'>
+      <path d='M8 5.6c0-.9 1-1.4 1.7-.9l8.2 5.5c.6.4.6 1.3 0 1.7l-8.2 5.5c-.7.5-1.7 0-1.7-.9z' />
+    </svg>
+  )
+}
+
+export function PauseIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'>
+      <rect x='7' y='5.5' width='3.6' height='13' rx='1.3' />
+      <rect x='13.4' y='5.5' width='3.6' height='13' rx='1.3' />
+    </svg>
+  )
+}
+
+export function MuteIcon({ className = base }: IconProps) {
+  return (
+    <svg className={className} viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'>
+      <path d='M5 9.5h3l4-3.2v11.4l-4-3.2H5z' />
+      <path d='M15.5 9.8l4.6 4.6M20.1 9.8l-4.6 4.6' />
+    </svg>
+  )
+}

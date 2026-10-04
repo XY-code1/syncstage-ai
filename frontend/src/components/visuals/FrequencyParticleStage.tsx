@@ -28,6 +28,8 @@ export interface FrequencyParticleStageProps {
   rightName?: string
   reducedMotion?: boolean
   className?: string
+  /** stage = 完整舞台；ambient = 只当背景粒子层，不参与任何视觉中心。 */
+  variant?: 'stage' | 'ambient'
 }
 
 interface StageHardware {
@@ -138,11 +140,13 @@ function FrequencyStageFallback({
   rightAvatar,
   leftName = '你',
   rightName = '同频听众',
+  ambient = false,
 }: {
   leftAvatar?: string
   rightAvatar?: string
   leftName?: string
   rightName?: string
+  ambient?: boolean
 }) {
   return (
     <div
@@ -159,6 +163,8 @@ function FrequencyStageFallback({
             + 'linear-gradient(180deg, #04100c 0%, #020806 100%)',
         }}
       />
+      {ambient ? null : (
+      <>
       <span className='absolute left-1/2 top-[36%] -translate-x-1/2 -translate-y-1/2 opacity-70'>
         <Vinyl size={132} accent='#31f58a' />
       </span>
@@ -170,6 +176,8 @@ function FrequencyStageFallback({
       <span className='absolute right-[7%] top-[15%] rounded-full border border-vibepurple-500/55 bg-stage-950/80 p-1'>
         <Avatar name={rightName} from='#8b6cff' to='#2a1a5e' src={rightAvatar} size={44} />
       </span>
+      </>
+      )}
     </div>
   )
 }
@@ -181,9 +189,11 @@ export function FrequencyParticleStage({
   rightAvatar,
   leftName = '你',
   rightName = '同频听众',
+  variant = 'stage',
   reducedMotion,
   className,
 }: FrequencyParticleStageProps) {
+  const ambient = variant === 'ambient'
   const [hardware, setHardware] = useState<StageHardware | null>(null)
   const [failed, setFailed] = useState(false)
   const mediaReduced = useMediaReduced()
@@ -230,6 +240,7 @@ export function FrequencyParticleStage({
     >
       {webglFailed ? (
         <FrequencyStageFallback
+          ambient={ambient}
           leftAvatar={leftAvatar}
           rightAvatar={rightAvatar}
           leftName={leftName}
@@ -248,6 +259,7 @@ export function FrequencyParticleStage({
             onCreated={handleCreated}
           >
             <FrequencyParticleScene
+              variant={variant}
               status={status}
               progress={progress}
               tier={capability.tier}

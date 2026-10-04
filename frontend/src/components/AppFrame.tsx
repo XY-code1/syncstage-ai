@@ -14,7 +14,6 @@ export function AppFrame({ children }: { children: ReactNode }) {
     </div>
   )
 }
-
 export function Toaster() {
   const { toasts, dismissToast } = useSession()
 

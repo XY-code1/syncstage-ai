@@ -33,7 +33,7 @@ jobs:
         env:
           VITE_BASE_PATH: /syncstage-ai/
           VITE_AGENT_MODE: mock
-          VITE_ENABLE_LOCAL_DEMO_AUDIO: "false"
+          VITE_ENABLE_LOCAL_AUDIO: "false"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

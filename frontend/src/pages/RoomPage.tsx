@@ -40,8 +40,9 @@ import {
   type RoomMessage,
 } from '../lib/api'
 import type { RoomState } from '../types'
-import { DemoMusicPlayer } from '../components/music/DemoMusicPlayer'
-import { localDemoAudioByTitle } from '../data/localDemoAudioManifest'
+import { DemoMusicPlayer, useMusicPlayer } from '../components/music/DemoMusicPlayer'
+import { MusicControl } from '../components/music/MusicControl'
+import { localDemoAudioByKey, localDemoAudioByTitle } from '../data/localDemoAudioManifest'
 
 /**
  * 同行房间 = 消息模块里的一个群聊。
@@ -142,6 +143,8 @@ function fromServer(message: RoomMessage, meId: string): ChatMessage {
 }
 
 export function RoomPage() {
+  const musicPlayer = useMusicPlayer()
+  const selectedTrack = localDemoAudioByKey(musicPlayer.selectedTrackId)
   const { concertId: concertIdParam = '', roomId: roomIdParam = '' } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
@@ -487,8 +490,9 @@ export function RoomPage() {
           </button>
           <div className='min-w-0 flex-1 text-center'>
             <p className='truncate text-[14px] font-semibold leading-tight text-white'>{room.concertTitle}同行组</p>
-            <p className='truncate text-[10.5px] text-white/45'>{total}人·{meetingLabel}</p>
+            <p className='truncate text-[10.5px] text-white/45'>{total}人·{meetingLabel} · 《{selectedTrack.title}》</p>
           </div>
+          <MusicControl compact className='ml-0.5' />
           <button
             type='button'
             aria-label='房间设置'

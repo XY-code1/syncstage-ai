@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { EvidenceList, PreferenceNotes } from '../components/AgentEvidence'
 import { QQMusicBar } from '../components/QQMusicBar'
@@ -18,8 +18,8 @@ import { useExitToFrequency } from '../hooks/useExitToFrequency'
 import { Avatar } from '../components/Avatar'
 import { WaveformBars } from '../components/musicVisuals'
 import { MusicBasisNote, OfficialPlaylistBadge, OfficialPlaylistLink, OfficialPlaylistSource, sharedSongLabel } from '../components/OfficialPlaylistSource'
-import { DemoMusicPlayer } from '../components/music/DemoMusicPlayer'
-import { localDemoAudioByTitle } from '../data/localDemoAudioManifest'
+import { DemoMusicPlayer, useMusicPlayer } from '../components/music/DemoMusicPlayer'
+import { localDemoAudioByKey, localDemoAudioByTitle } from '../data/localDemoAudioManifest'
 
 /** 「暂不同行」的候选项：只用于优化下一轮匹配，不会通知对方。 */
 const SKIP_REASONS = ['音乐不搭', '同行方式不同', '人数不合适', '其它']
@@ -50,6 +50,8 @@ function shortReason(text: string, max = 54): string {
  * 不会通知对方），后者直接切到下一位真实候选人；双方确认后才创建消息房间。
  */
 export function MatchRevealPage() {
+  const musicPlayer = useMusicPlayer()
+  const selectedTrack = localDemoAudioByKey(musicPlayer.selectedTrackId)
   const { concertId = 'night-flight' } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
@@ -115,6 +117,26 @@ export function MatchRevealPage() {
     if (secondsLeft === 0) void cancelInvite(true)
     return () => window.clearInterval(timer)
   }, [cancelInvite, secondsLeft, waiting])
+
+  // 匹配成功：先给一段 fireworks.mp3 的高光提示，5 秒后引擎自动淡回用户选的歌。
+  useEffect(() => {
+    if (!current) return
+    void musicPlayer.playCue('highlight')
+  }, [current?.userId])
+
+  // 等待对方确认：整段停留在 beijing-snow.mp3 的低音量氛围里；确认后再淡回用户选的歌。
+  const wasWaiting = useRef(false)
+  useEffect(() => {
+    if (waiting) {
+      wasWaiting.current = true
+      void musicPlayer.playCue('waiting')
+      return
+    }
+    if (wasWaiting.current) {
+      wasWaiting.current = false
+      void musicPlayer.releaseCue()
+    }
+  }, [waiting])
 
   // 刷新恢复：pending 已是 accepted / confirmed 时，把当前候选人还原成房间对应的那一位。
   useEffect(() => {
@@ -282,6 +304,7 @@ export function MatchRevealPage() {
       />
 
       <main className='relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-28 pt-2'>
+        <p className='relative z-10 mx-auto mb-2 w-fit rounded-full border border-brand-400/20 bg-black/35 px-3 py-1 text-[12px] text-brand-200'>你发出的信号 · 《{selectedTrack.title}》</p>
         <img src={`${import.meta.env.BASE_URL}concert-crowd-bg.png`} alt='' className='pointer-events-none absolute inset-0 h-full w-full object-cover object-bottom opacity-30'/>
         <div className='pointer-events-none absolute inset-0 bg-gradient-to-b from-stage-950/70 via-stage-950/85 to-stage-950'/>
         <span className='sr-only'>发现同频同行者</span>

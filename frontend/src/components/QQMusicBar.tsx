@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { cn } from '../lib/cn'
+import { MusicControl } from './music/MusicControl'
 
 /**
  * 模拟 QQ 音乐顶栏。只借鉴音乐产品的信息层级与品牌绿点缀，
@@ -45,6 +46,7 @@ export function QQMusicBar({
           {subtitle ? <p className='truncate text-[11px] text-white/45'>{subtitle}</p> : null}
         </div>
         {right}
+        <MusicControl compact />
       </div>
     </header>
   )

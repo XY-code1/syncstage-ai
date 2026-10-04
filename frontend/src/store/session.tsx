@@ -98,6 +98,8 @@ function sanitizePersisted(raw: Partial<PersistedState>): Partial<PersistedState
 
 interface PersistedState {
   concertId: string
+  /** 当前匹配会话选中的音乐信号。 */
+  selectedTrackId: string
   authorized: boolean
   scopes: AuthorizationScope[]
   rawIntent: string
@@ -119,6 +121,7 @@ interface PersistedState {
 
 const emptyState: PersistedState = {
   concertId: 'night-flight',
+  selectedTrackId: 'sfl-demo-track-01',
   authorized: false,
   scopes: [...ALL_SCOPES],
   rawIntent: '',
@@ -161,6 +164,8 @@ interface SessionContextValue {
 
   concertId: string
   selectConcert: (concertId: string) => void
+  selectedTrackId: string
+  setSelectedTrackId: (trackId: string) => void
 
   authorized: boolean
   scopes: AuthorizationScope[]
@@ -393,6 +398,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     },
     [update],
   )
+  const setSelectedTrackId = useCallback((trackId: string) => update(() => ({ selectedTrackId: trackId })), [update])
 
   const toggleScope = useCallback(
     (scope: AuthorizationScope) => {
@@ -930,6 +936,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       dataMode,
       concertId: state.concertId,
       selectConcert,
+      selectedTrackId: state.selectedTrackId,
+      setSelectedTrackId,
       authorized: state.authorized,
       scopes: state.scopes,
       toggleScope,

@@ -48,7 +48,7 @@ export function HomePage() {
       startNewMatch()
       return navigate(consentGranted ? `/concert/${eventId}/task` : `/concert/${eventId}`)
     }
-    navigate(concert ? `/concert/${concert.id}` : '/concerts')
+    navigate(`/concert/${concert?.id ?? eventId}/song`)
   }
 
   return <div className='relative min-h-[calc(100dvh-72px)] overflow-hidden bg-[#020706] text-white'>
@@ -78,7 +78,7 @@ export function HomePage() {
           <span className='sr-only'>两条轨道尚未汇合</span>
         </div>
         <button type='button' onClick={openPrimary} className='mt-5 flex min-h-14 w-full items-center justify-center rounded-full bg-brand-400 px-5 text-[18px] font-black text-[#03110a] shadow-[0_10px_34px_rgba(49,245,138,.28)] active:scale-[.99]'>
-          {room ? '继续同行房间' : resultReady ? '查看同频结果' : agent ? '重新找同频搭子' : '开始找同频搭子'} <span className='ml-3 text-2xl'>→</span>
+          {room ? '继续同行房间' : resultReady ? '查看同频结果' : agent ? '重新找同频搭子' : '发出我的同频信号'} <span className='ml-3 text-2xl'>→</span>
         </button>
         <div className='mt-4 flex items-center justify-center gap-3 text-sm text-white/65'><span className='flex items-center gap-1'><UsersIcon className='h-4 w-4 text-brand-300'/>同场匹配</span><span className='text-white/20'>|</span><span>♡ 双方确认</span><span className='text-white/20'>|</span><span className='flex items-center gap-1'><ShieldIcon className='h-4 w-4'/>公开场合见面</span></div>
       </section>

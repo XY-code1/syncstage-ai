@@ -48,6 +48,7 @@ credentials.json
 
 # 本地评审授权音频：整个目录仅留在开发机，不进入 Git
 frontend/public/demo-audio-local/
+.env.local
 *.mp3
 *.m4a
 *.ogg
@@ -57,3 +58,5 @@ frontend/public/demo-audio-local/
 *.qmc
 *.qmcflac
 *.mflac
+*.qmc0
+*.qmc3

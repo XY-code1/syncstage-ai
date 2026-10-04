@@ -29,7 +29,8 @@ import { SessionProvider, useSession } from './store/session'
 import { SocialProvider } from './store/social'
 import { ConcertFlowProvider } from './store/concertFlow'
 import { ProfileProvider } from './store/profile'
-import { MusicPlayerProvider } from './components/music/DemoMusicPlayer'
+import { AudioProvider } from './components/music/DemoMusicPlayer'
+import { SongSelectPage } from './pages/SongSelectPage'
 
 /** 消息中心需要知道当前房间状态，因此放在 SessionProvider 内部 */
 function SocialHost({ children }: { children: ReactNode }) {
@@ -43,7 +44,7 @@ function SocialHost({ children }: { children: ReactNode }) {
 
 export default function App() {
   return (
-    <MusicPlayerProvider>
+    <AudioProvider>
     <SessionProvider>
       <ConcertFlowProvider>
         <ProfileProvider>
@@ -66,6 +67,7 @@ export default function App() {
               <Route path='/concerts' element={<ConcertListPage />} />
               <Route path='/list' element={<Navigate to='/concerts' replace />} />
               <Route path='/concert/:concertId' element={<ConcertDetailPage />} />
+              <Route path='/concert/:concertId/song' element={<SongSelectPage />} />
               <Route path='/concert/:concertId/authorize' element={<MusicAuthPage />} />
               <Route path='/concert/:concertId/task' element={<IntentPage />} />
               <Route path='/concert/:concertId/running' element={<AgentProgressPage />} />
@@ -90,6 +92,6 @@ export default function App() {
         </ProfileProvider>
       </ConcertFlowProvider>
     </SessionProvider>
-    </MusicPlayerProvider>
+    </AudioProvider>
   )
 }

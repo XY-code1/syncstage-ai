@@ -1,24 +1,77 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Avatar } from '../components/Avatar'
-import { Poster } from '../components/Poster'
-import { QQMusicBar } from '../components/QQMusicBar'
 import { Button, Card, Skeleton, StateView } from '../components/ui'
-import {
-  SparkleIcon,
-} from '../components/icons'
+import { QQMusicBar } from '../components/QQMusicBar'
+import { ClockIcon, MapPinIcon, MusicIcon, SparkleIcon } from '../components/icons'
 import { fetchConcert } from '../lib/api'
 import { messageOf, useSession } from '../store/session'
-import { ALL_SCOPES } from '../lib/tmeMock'
 import type { Concert } from '../types'
 import { useConcertFlow } from '../store/concertFlow'
+import { useMusicPlayer } from '../components/music/DemoMusicPlayer'
 
-const AGENT_FLOW = ['授权 QQ 音乐画像', '说出同行需求', 'Agent 检索与排序', '查看音乐证据', '双方确认后进房间']
+/** 把 2026-10-18 19:30 压成演出页要用的「10月18日 19:30」。 */
+function shortDateTime(value: string): string {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2})/)
+  if (!match) return value
+  return `${Number(match[2])}月${Number(match[3])}日 ${match[4]}`
+}
+
+/** 只保留「声浪 Livehouse」这一级场地名，去掉「静安店」这类门店后缀。 */
+function shortVenue(value: string): string {
+  const trimmed = value.replace(/\s*[^\s]*店\s*$/, '').trim()
+  return trimmed || value
+}
+
+/**
+ * 主视觉卡：全幅 Livehouse 现场感背景 + 底部深色渐变遮罩，全页只有这一个大标题。
+ * 背景图加载失败时才退回原有的蓝绿渐变，保证任何情况下都有可读的封面。
+ */
+function ConcertHero({ concert }: { concert: Concert }) {
+  const [imageFailed, setImageFailed] = useState(false)
+  const { poster } = concert
+
+  return (
+    <div
+      data-concert-hero
+      className='relative aspect-[4/5] max-h-[62vh] w-full overflow-hidden'
+      style={
+        imageFailed
+          ? { backgroundImage: `linear-gradient(148deg, ${poster.from} 0%, ${poster.via} 48%, ${poster.to} 100%)` }
+          : undefined
+      }
+    >
+      {imageFailed ? (
+        <div className='poster-grain absolute inset-0 opacity-70' />
+      ) : (
+        <>
+          <img
+            data-concert-hero-image
+            src={`${import.meta.env.BASE_URL}concert-crowd-bg.png`}
+            alt=''
+            aria-hidden='true'
+            onError={() => setImageFailed(true)}
+            className='absolute inset-0 h-full w-full object-cover object-bottom brightness-[1.12]'
+          />
+          <div className='poster-grain absolute inset-0 opacity-35' />
+        </>
+      )}
+      {/* 深色渐变遮罩：顶部压住顶栏，底部保证标题对比度，中间保留现场灯光 */}
+      <div className='absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-stage-950/85 to-transparent' />
+      <div className='absolute inset-0 bg-gradient-to-t from-stage-950 via-stage-950/40 to-transparent' />
+      <div className='absolute inset-x-0 bottom-0 p-5'>
+        <h1 className='text-[30px] font-black leading-tight text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.8)]'>
+          {concert.title}
+        </h1>
+      </div>
+    </div>
+  )
+}
 
 export function ConcertDetailPage() {
   const { concertId = 'night-flight' } = useParams()
   const navigate = useNavigate()
-  const { selectConcert, authorized, scopes, agent, room, judgeMode, matchResumable, startNewMatch } = useSession()
+  const player = useMusicPlayer()
+  const { selectConcert, authorized, agent, room, matchResumable, startNewMatch } = useSession()
   const { flow } = useConcertFlow(concertId)
   const [concert, setConcert] = useState<Concert | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -42,124 +95,100 @@ export function ConcertDetailPage() {
   }, [load])
 
   // 只有会话未终结（未撤回 / 拒绝 / 过期）时才「回到同行方案」，否则从任务确认重新开始。
-  const entryLabel = matchResumable ? '回到同行方案' : authorized ? '继续 AI找同行' : 'AI找同行'
-  const entryTarget = matchResumable ? `/concert/${concertId}/matches` : (authorized || flow.consentStatus === 'granted') ? `/concert/${concertId}/task` : `/concert/${concertId}/authorize`
+  const entryTarget = matchResumable
+    ? `/concert/${concertId}/matches`
+    : authorized || flow.consentStatus === 'granted'
+      ? `/concert/${concertId}/task`
+      : `/concert/${concertId}/authorize`
+
+  /**
+   * 主按钮：用这一次真实点击解锁浏览器音频（iPhone Safari 要求），
+   * 同步播放入口音乐（send-location.mp3，15% 音量、800ms 淡入），然后进入匹配流程。
+   */
+  const enterNightFlight = () => {
+    player.unlock()
+    void player.playCue('entry')
+    if (!matchResumable && agent) startNewMatch()
+    navigate(entryTarget)
+  }
 
   return (
     <div className='flex min-h-screen flex-col'>
-      <QQMusicBar
-        title={concert ? concert.title : '演出详情'}
-        subtitle={concert ? concert.subtitle : undefined}
-        onBack={() => navigate(-1)}
-        right={<span className='text-[11px] text-white/45'>演出</span>}
-      />
+      <QQMusicBar title={concert ? concert.title : '演出详情'} onBack={() => navigate(-1)} />
 
-      <main className='flex-1 px-4 pb-14 pt-4'>
+      <main className='flex-1 pb-14'>
         {status === 'loading' ? (
-          <div className='flex flex-col gap-4'>
-            <Skeleton className='aspect-[4/3] w-full' />
-            <Skeleton className='h-5 w-2/3' />
-            <Skeleton className='h-3 w-1/2' />
+          <div className='flex flex-col gap-4 px-4 pt-4'>
+            <Skeleton className='aspect-[4/5] w-full' />
+            <Skeleton className='h-24 w-full' />
             <Skeleton className='h-28 w-full' />
-            <Skeleton className='h-20 w-full' />
           </div>
         ) : null}
 
         {status === 'error' ? (
-          <StateView
-            status='error'
-            title='演出信息加载失败'
-            description={error}
-            actionLabel='重新加载'
-            onAction={() => void load()}
-            secondaryLabel='返回首页'
-            onSecondary={() => navigate('/')}
-          />
+          <div className='px-4 pt-4'>
+            <StateView
+              status='error'
+              title='演出信息加载失败'
+              description={error}
+              actionLabel='重新加载'
+              onAction={() => void load()}
+              secondaryLabel='返回首页'
+              onSecondary={() => navigate('/')}
+            />
+          </div>
         ) : null}
 
         {status === 'ready' && concert ? (
           <div className='flex flex-col gap-5'>
-            <Poster concert={concert} />
+            <ConcertHero concert={concert} />
 
-            <div>
-              <div className='flex items-start justify-between gap-3'>
-                <div>
-                  <h1 className='text-[22px] font-semibold leading-tight text-white'>{concert.title}</h1>
-                  <p className='mt-1.5 text-[13px] text-white/60'>{concert.artist}</p>
-                  <p className='mt-0.5 text-[11px] text-white/40'>{concert.artistNote}</p>
-                </div>
-                <span className='shrink-0 rounded-pill border border-brand-500/30 bg-brand-500/12 px-2.5 py-1 text-[11px] text-brand-200'>
-                  {concert.ticketStatus}
-                </span>
+            <dl className='mx-4 flex flex-col gap-2.5 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3.5'>
+              <div className='flex items-center gap-2.5'>
+                <MusicIcon className='h-4 w-4 shrink-0 text-brand-300' />
+                <dd className='text-[14px] text-white/85'>
+                  {concert.artist} · {concert.city}站
+                </dd>
               </div>
-
-              <div className='mt-4 flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.025] px-3.5 py-2.5'>
-                <div className='flex -space-x-2'>
-                  {['#31c27c', '#61c8ff', '#ffc46b', '#9b8cff'].map((color, index) => (
-                    <Avatar key={color} name={`同${index}`} from={color} to='#0b1116' size={24} className='border border-stage-950' />
-                  ))}
-                </div>
-                <p className='text-[12px] text-white/55'>
-                  已有 <span className='font-semibold text-brand-300'>128</span> 位同场听众开启匹配
-                </p>
+              <div className='flex items-center gap-2.5'>
+                <ClockIcon className='h-4 w-4 shrink-0 text-brand-300' />
+                <dd className='text-[14px] text-white/85'>{shortDateTime(concert.date)}</dd>
               </div>
-            </div>
+              <div className='flex items-center gap-2.5'>
+                <MapPinIcon className='h-4 w-4 shrink-0 text-brand-300' />
+                <dd className='text-[14px] text-white/85'>{shortVenue(concert.venue)}</dd>
+              </div>
+            </dl>
 
-            {/* Agent 入口 */}
-            <Card className='border-brand-500/35 bg-brand-500/[0.07]' glow>
+            {/* Agent 入口：只保留一句话说明和唯一主按钮 */}
+            <Card className='mx-4 border-brand-500/35 bg-brand-500/[0.07]' glow>
               <div className='flex items-start gap-3'>
                 <span className='mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-brand-500/18'>
                   <SparkleIcon className='h-5 w-5 text-brand-300' />
                 </span>
-                <div className='min-w-0 flex-1'>
-                  <div className='flex items-center gap-2'>
-                    <p className='text-base font-semibold text-white'>QQ音乐「一起去现场」</p>
-                    <span className='rounded-pill border border-brand-500/40 bg-brand-500/12 px-2 py-[1px] text-[10px] text-brand-200'>
-                      面向独自观演用户的 AI 同行组队 Agent
-                    </span>
-                  </div>
-                  <p className='mt-1.5 text-sm leading-relaxed text-white/65'>
-                    AI同频同行助手 · 在开场之前，找到和你同频的人。授权模拟音乐画像，Agent 会调用同场检索、安全过滤、排序与解释工具，给出<span className='text-brand-200'>可追溯到音乐数据</span>的理由。
-                  </p>
-                  <div className='mt-3 flex flex-wrap gap-1.5'>
-                    {AGENT_FLOW.map((step, index) => (
-                      <span
-                        key={step}
-                        className='rounded-pill border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[11px] text-white/55'
-                      >
-                        {index + 1}. {step}
-                      </span>
-                    ))}
-                  </div>
-                  <Button
-                    className='mt-3.5'
-                    full
-                    size='lg'
-                    icon={<SparkleIcon className='h-4 w-4' />}
-                    onClick={() => {
-                      if (!matchResumable && agent) startNewMatch()
-                      navigate(entryTarget)
-                    }}
-                  >
-                    {entryLabel}
-                  </Button>
-                  <p className='mt-2 text-center text-[11px] text-white/40'>
-                    {authorized ? `已授权 ${scopes.length}/${ALL_SCOPES.length} 类音乐数据 · 随时可以取消` : '第一次使用需要先授权音乐数据'}
-                    {judgeMode ? ' · 评委模式已开启' : ''}
-                  </p>
-                </div>
+                <p className='text-[15px] leading-relaxed text-white/85'>
+                  选一首今晚的歌，Tara会先替你找到同场、同频且安全边界一致的人。
+                </p>
               </div>
+              <Button
+                className='mt-4'
+                full
+                size='lg'
+                icon={<SparkleIcon className='h-4 w-4' />}
+                onClick={enterNightFlight}
+              >
+                进入夜航现场
+              </Button>
             </Card>
 
             {room ? (
-              <Card className='border-brand-500/35 bg-brand-500/8'>
+              <Card className='mx-4 border-brand-500/35 bg-brand-500/8'>
                 <p className='text-[13px] text-brand-100'>你已经在这场演出有一个临时同频房间</p>
                 <Button size='sm' className='mt-3' onClick={() => navigate(`/concert/${concertId}/room`)}>
                   回到同频房间
                 </Button>
               </Card>
             ) : null}
-
           </div>
         ) : null}
       </main>
