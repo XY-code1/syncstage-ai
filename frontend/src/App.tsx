@@ -3,7 +3,8 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppFrame, Toaster } from './components/AppFrame'
 import { DemoConsole } from './components/DemoConsole'
 import { JudgeBanner } from './components/JudgeBanner'
-import { TabLayout } from './components/TabLayout'
+import { MainAppLayout } from './components/TabLayout'
+import { ImmersiveSyncLayout } from './components/ImmersiveSyncLayout'
 import { AgentIcebreakPage } from './pages/AgentIcebreakPage'
 import { AgentProgressPage } from './pages/AgentProgressPage'
 import { AgentTracePage } from './pages/AgentTracePage'
@@ -53,17 +54,31 @@ export default function App() {
             <JudgeBanner />
             <Routes>
               {/* 一级导航：首页 / 同频 / 消息 / 我的 */}
-              <Route element={<TabLayout />}>
-                <Route path='/' element={<HomePage />} />
-                <Route path='/sync' element={<SyncPage />} />
+              <Route element={<MainAppLayout />}>
+                <Route path='/' element={<Navigate to='/home' replace />} />
+                <Route path='/home' element={<HomePage />} />
                 <Route path='/messages' element={<MessagesPage />} />
                 <Route path='/me' element={<ProfilePage />} />
+                <Route path='/profile' element={<ProfilePage />} />
+              </Route>
+              <Route element={<ImmersiveSyncLayout />}>
+                <Route path='/sync' element={<SyncPage />} />
+                <Route path='/concert/:concertId/select-song' element={<SongSelectPage />} />
+                <Route path='/concert/:concertId/searching' element={<AgentProgressPage />} />
+                <Route path='/concert/night-voyage/reveal' element={<SyncPage />} />
+                <Route path='/concert/:concertId/sync/select-song' element={<SongSelectPage />} />
+                <Route path='/concert/:concertId/sync/searching' element={<AgentProgressPage />} />
+                <Route path='/concert/:concertId/sync/reveal' element={<MatchRevealPage />} />
+                <Route path='/concert/:concertId/sync/agent' element={<IntentPage />} />
+                <Route path='/concert/:concertId/sync/waiting' element={<MatchRevealPage />} />
+                <Route path='/concert/:concertId/sync/room' element={<RoomPage />} />
               </Route>
 
               {/* 二级页面 */}
               <Route path='/messages/:threadId' element={<ChatRoomPage />} />
               <Route path='/me/edit' element={<EditProfilePage />} />
               <Route path='/me/:section' element={<ProfileSectionPage />} />
+              <Route element={<ImmersiveSyncLayout />}>
               <Route path='/concerts' element={<ConcertListPage />} />
               <Route path='/list' element={<Navigate to='/concerts' replace />} />
               <Route path='/concert/:concertId' element={<ConcertDetailPage />} />
@@ -82,6 +97,7 @@ export default function App() {
               <Route path='/concert/:concertId/room' element={<RoomPage />} />
               {/* 第二个浏览器上下文凭 roomId 直接进入同一房间（双人真人聊天验证用） */}
               <Route path='/room/:roomId' element={<RoomPage />} />
+              </Route>
               <Route path='/showcase' element={<ShowcasePage />} />
               <Route path='*' element={<Navigate to='/' replace />} />
             </Routes>

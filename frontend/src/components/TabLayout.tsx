@@ -1,14 +1,14 @@
-import type { ReactNode } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { useLayoutEffect, type ReactNode } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '../lib/cn'
 import { ChatIcon, HomeIcon, PersonIcon, UsersIcon } from './icons'
 import { useSocial } from '../store/social'
 
 const TABS = [
-  { to: '/', label: '首页', Icon: HomeIcon },
+  { to: '/home', label: '首页', Icon: HomeIcon },
   { to: '/sync', label: '同频', Icon: UsersIcon },
   { to: '/messages', label: '消息', Icon: ChatIcon },
-  { to: '/me', label: '我的', Icon: PersonIcon },
+  { to: '/profile', label: '我的', Icon: PersonIcon },
 ]
 
 /** 一级导航：固定为 首页 / 同频 / 消息 / 我的 */
@@ -18,7 +18,7 @@ export function TabBar() {
   return (
     <nav
       aria-label='主导航'
-      className='safe-bottom sticky bottom-0 z-30 border-t border-white/8 bg-stage-950/95 backdrop-blur-xl'
+      className='safe-bottom fixed bottom-0 left-1/2 z-30 w-full max-w-[390px] -translate-x-1/2 border-t border-white/20 bg-[#233454]/75 backdrop-blur-xl'
     >
       <div className='flex items-stretch'>
         {TABS.map((tab) => (
@@ -28,7 +28,7 @@ export function TabBar() {
             end={tab.to === '/'}
             className={({ isActive }) =>
               cn(
-                'flex flex-1 flex-col items-center gap-1 pb-1 pt-2.5 transition',
+                'flex min-h-[64px] flex-1 flex-col items-center gap-1 pb-1 pt-2.5 transition',
                 isActive ? 'text-brand-300' : 'text-white/40 hover:text-white/70',
               )
             }
@@ -54,9 +54,17 @@ export function TabBar() {
 }
 
 /** 一级页面外壳：内容区 + 固定底部导航 */
-export function TabLayout() {
+const pageScroll = new Map<string, number>()
+export function MainAppLayout() {
+  const location = useLocation()
+  useLayoutEffect(() => {
+    window.scrollTo(0, pageScroll.get(location.pathname) ?? 0)
+    const save = () => pageScroll.set(location.pathname, window.scrollY)
+    window.addEventListener('scroll', save, { passive: true })
+    return () => window.removeEventListener('scroll', save)
+  }, [location.pathname])
   return (
-    <div className='flex min-h-screen flex-col'>
+    <div data-layout='main-app' className='flex min-h-[100dvh] flex-col pb-[calc(64px+env(safe-area-inset-bottom))]'>
       <main className='flex-1'>
         <Outlet />
       </main>
@@ -64,6 +72,7 @@ export function TabLayout() {
     </div>
   )
 }
+export const TabLayout = MainAppLayout
 
 /** 一级页面共用的紧凑顶部：品牌条 + 页面标题，避免整屏都是卡片标题 */
 export function TabHeader({

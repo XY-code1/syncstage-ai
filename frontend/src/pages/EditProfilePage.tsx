@@ -65,7 +65,7 @@ export function EditProfilePage() {
   }
 
   return (
-    <div className='flex min-h-screen flex-col bg-stage-950'>
+    <div data-page='edit-profile' className='flex min-h-[100dvh] flex-col bg-stage-950'>
       <header className='safe-top sticky top-0 z-30 border-b border-white/6 bg-stage-950/94 px-3 pb-2.5 pt-2 backdrop-blur-xl'>
         <div className='flex items-center gap-2.5'>
           <button
@@ -77,8 +77,8 @@ export function EditProfilePage() {
             <ArrowLeftIcon className='h-4 w-4' />
           </button>
           <div className='min-w-0 flex-1'>
-            <p className='text-[15px] font-semibold text-white'>编辑资料</p>
-            <p className='text-[10.5px] text-white/45'>改完记得保存，我的与聊天会同步更新</p>
+            <p className='font-serif text-[19px] font-semibold tracking-[.12em] text-white'>我的现场通行证</p>
+            <p className='text-[11.5px] tracking-[.12em] text-white/55'>音乐让我们相遇</p>
           </div>
         </div>
       </header>
@@ -86,7 +86,7 @@ export function EditProfilePage() {
       <main className='flex-1 pb-32'>
         <section className='mt-3 px-4'>
           <div className='flex items-center gap-3.5'>
-            <UserAvatar size={64} showRing preview={{ nickname: draft.nickname, avatar: draft.avatar }} />
+            <UserAvatar size={64} showRing preview={{ nickname: draft.nickname, avatar: draft.avatar || `${import.meta.env.BASE_URL}portraits/demo-orange.webp` }} />
             <div className='min-w-0 flex-1'>
               <button
                 type='button'

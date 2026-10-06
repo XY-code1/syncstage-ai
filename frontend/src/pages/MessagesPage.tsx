@@ -1,114 +1,15 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from '../components/Avatar'
-import { SegmentedTabs, TabHeader } from '../components/TabLayout'
-import { BellIcon, ChatIcon, ChevronRightIcon, SparkleIcon, UsersIcon } from '../components/icons'
-import { THREAD_KIND_LABEL, useSocial } from '../store/social'
-import type { Thread, ThreadKind } from '../store/social'
+import { BellIcon, SparkleIcon, UsersIcon } from '../components/icons'
+import { useSocial, type Thread } from '../store/social'
+import { useSession } from '../store/session'
 
-type Filter = 'all' | ThreadKind
-
-const FILTERS: Array<{ value: Filter; label: string }> = [
-  { value: 'all', label: '全部' },
-  { value: 'agent', label: 'Agent 通知' },
-  { value: 'group', label: '群聊与临时房间' },
-  { value: 'dm', label: '私聊' },
-  { value: 'system', label: '系统通知' },
-]
-
-export function MessagesPage() {
-  const navigate = useNavigate()
-  const { threads } = useSocial()
-  const [filter, setFilter] = useState<Filter>('all')
-
-  const visible = threads.filter((thread) => filter === 'all' || thread.kind === filter)
-
-  return (
-    <div className='tab-page'>
-      <TabHeader title='消息' subtitle='Agent 通知、临时房间与私聊' />
-
-      <div className='px-4 pt-4'>
-        <SegmentedTabs options={FILTERS} value={filter} onChange={setFilter} />
-
-        <div className='mt-3.5 flex flex-col gap-2'>
-          {visible.length === 0 ? (
-            <div className='soft-card p-5 text-center'>
-              <p className='text-[13px] text-white/70'>这一分类还没有消息</p>
-              <p className='mt-1 text-[11px] text-white/40'>完成一次匹配或加入临时房间后，消息会出现在这里。</p>
-            </div>
-          ) : (
-            visible.map((thread) => (
-              <ThreadRow
-                key={thread.id}
-                thread={thread}
-                onOpen={() =>
-                  // 同行房间就是消息模块里的一个群聊：列表里点它直接进房间，而不是另一个聊天页
-                  navigate(thread.kind === 'group' && thread.concertId ? `/concert/${thread.concertId}/room` : `/messages/${thread.id}`)
-                }
-              />
-            ))
-          )}
-        </div>
-
-        <p className='mt-4 text-center text-[10.5px] leading-relaxed text-white/30'>
-          本 Demo 的消息均为虚构内容，未接入真实 QQ 音乐账号或真实聊天服务。
-        </p>
-      </div>
-    </div>
-  )
+export function MessagesPage(){
+ const navigate=useNavigate(),{threads}=useSocial(),{agent,concertId}=useSession();const [filter,setFilter]=useState('全部');const waiting=agent?.pendingConfirmation.status==='awaiting_peer';const candidate=agent?.rankedCandidates[0]?.candidate
+ const visible=[...threads].sort((a,b)=>(a.kind==='agent'?-1:a.kind==='system'?1:0)-(b.kind==='agent'?-1:b.kind==='system'?1:0)).filter(t=>filter==='全部'||(filter==='通知'?t.kind==='system':t.kind==='agent'))
+ return <div className='summer-account-page' data-page='messages'><header className='summer-heading'><span className='summer-eyebrow'>QQ音乐 · 一起去现场</span><h1>消息</h1><p>今晚，有人正在回应你的同频</p></header>
+  <section className='summer-glass invitation-feature'><span className='invitation-sun' aria-hidden='true'>☀</span><div className='invitation-top'><span className='invitation-orbits'><img src={import.meta.env.BASE_URL+'portraits/demo-orange.webp'} alt='Demo访客头像'/><Avatar name={candidate?.nickname??'同频听众'} from={candidate?.avatar.from??'#8d72ff'} to={candidate?.avatar.to??'#283865'} size={46}/></span><span className='summer-pill'>{waiting?'等待对方确认':'邀请样式 · Demo'}</span></div><h2>{waiting?'1个同频邀请待确认':'有一封同频邀请正在等你'}</h2><p>共同歌曲《烟花》 · 夜航计划</p><button className='summer-primary' onClick={()=>navigate(waiting?'/concert/'+concertId+'/reveal':'/messages/agent-notify')}>{waiting?'查看邀请':'拆开邀请'} <span>›</span></button>{!waiting&&<small>展示示例，不代表已收到真人邀请</small>}</section>
+  <div className='summer-filters' aria-label='消息分类'>{['全部','同频邀请','通知'].map(f=><button key={f} aria-pressed={filter===f} onClick={()=>setFilter(f)}>{f}</button>)}</div><section aria-label='会话列表' className='summer-thread-list'>{visible.map(thread=><ThreadRow key={thread.id} thread={thread} onOpen={()=>navigate(thread.kind==='group'&&thread.concertId?'/concert/'+thread.concertId+'/room':'/messages/'+thread.id)}/>)}</section><p className='summer-disclaimer'>赛事 Demo · 会话为模拟数据，未接入官方账号</p></div>
 }
-
-function ThreadRow({ thread, onOpen }: { thread: Thread; onOpen: () => void }) {
-  const { messagesOf, unreadOf, roomChatOf } = useSocial()
-  const unread = unreadOf(thread)
-  // 同行房间会把"最后一条消息 / 时间 / 集合状态"广播过来；没有房间时退回群聊自身的数据
-  const roomChat = roomChatOf(thread.id)
-  const last = messagesOf(thread.id).slice(-1)[0]
-  const preview = roomChat?.preview || last?.text || thread.subtitle
-  const time = roomChat?.time || thread.time
-  const status = roomChat?.meetingLabel || thread.statusLabel
-
-  return (
-    <button type='button' onClick={onOpen} className='soft-card flex w-full items-center gap-3 p-3 text-left'>
-      {thread.avatar ? (
-        <Avatar name={thread.title} from={thread.avatar.from} to={thread.avatar.to} size={40} />
-      ) : (
-        <span className='flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-brand-500/12 text-brand-300'>
-          {thread.kind === 'agent' ? (
-            <SparkleIcon className='h-5 w-5' />
-          ) : thread.kind === 'group' ? (
-            <UsersIcon className='h-5 w-5' />
-          ) : thread.kind === 'system' ? (
-            <BellIcon className='h-5 w-5' />
-          ) : (
-            <ChatIcon className='h-5 w-5' />
-          )}
-        </span>
-      )}
-      <span className='min-w-0 flex-1'>
-        <span className='flex items-center gap-1.5'>
-          <span className='truncate text-[13.5px] font-semibold text-white'>{thread.title}</span>
-          <span className='shrink-0 rounded-pill border border-white/8 px-1.5 py-[1px] text-[9.5px] text-white/40'>
-            {THREAD_KIND_LABEL[thread.kind]}
-          </span>
-          {status ? (
-            <span className='shrink-0 rounded-pill border border-brand-500/30 bg-brand-500/[.08] px-1.5 py-[1px] text-[9.5px] text-brand-200'>
-              {status}
-            </span>
-          ) : null}
-        </span>
-        <span className='mt-0.5 block truncate text-[11.5px] text-white/45'>{preview}</span>
-      </span>
-      <span className='flex shrink-0 flex-col items-end gap-1.5'>
-        <span className='text-[10.5px] text-white/35'>{time}</span>
-        {unread > 0 ? (
-          <span className='flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-500 px-1 text-[9.5px] font-semibold text-stage-950'>
-            {unread}
-          </span>
-        ) : (
-          <ChevronRightIcon className='h-3.5 w-3.5 text-white/25' />
-        )}
-      </span>
-    </button>
-  )
-}
+function ThreadRow({thread,onOpen}:{thread:Thread;onOpen:()=>void}){const {messagesOf,unreadOf,roomChatOf}=useSocial(),room=roomChatOf(thread.id),preview=room?.preview||messagesOf(thread.id).slice(-1)[0]?.text||thread.subtitle;return <button onClick={onOpen} className={'summer-thread '+(thread.kind==='agent'?'pinned-thread ':'')+(thread.kind==='system'?'system-thread':'')}>{thread.avatar?<Avatar name={thread.title} from={thread.avatar.from} to={thread.avatar.to} size={48}/>:<span className='summer-thread-icon'>{thread.kind==='agent'?<SparkleIcon/>:thread.kind==='system'?<BellIcon/>:<UsersIcon/>}</span>}<span className='summer-thread-copy'><strong>{thread.kind==='agent'?'音乐助手':thread.title}</strong><span className='summer-thread-label'>{thread.kind==='agent'?'置顶 · 你的同行助手':thread.kind==='system'?'活动提醒':room?.meetingLabel||thread.statusLabel||'夜航计划'}</span><span className='summer-preview'>{preview}</span></span><span className='summer-thread-meta'><time>{room?.time||thread.time}</time>{unreadOf(thread)>0&&<span className='summer-unread' aria-label='未读消息'/>}</span></button>}

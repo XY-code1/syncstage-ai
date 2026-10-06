@@ -730,27 +730,43 @@ try {
   check(await waitForText('房间已归档，只可查看历史消息'), '⑨ 归档房间不能继续发送')
   check(!(await bodyText()).includes('输入消息……'), '⑨ 归档后输入框不可用')
 
-  step('⑩ 同频：人与匹配优先')
+  step('⑩ 同频：一次只揭晓一个人')
   await goto('/sync')
-  check(await waitForText('推荐同频用户', 20000), '⑩ 同频页以人为优先，而不是演出列表')
-  check(await waitForText('共同演出：'), '⑩ 推荐卡片突出共同演出')
-  check((await bodyText()).includes('推荐理由：'), '⑩ 推荐卡片给出推荐理由')
+  check(await waitForText('个同频信号', 20000), '⑩ 同频页以人为优先，而不是演出列表')
+  check((await bodyText()).includes('第 1 张 /'), '⑩ 顶部显示拆卡进度')
+  check(await hasElement('[data-signal-deck][data-deck-phase="sealed"]'), '⑩ 默认是未拆封的同频卡')
+  check(await waitForText('向上拆开同频卡'), '⑩ 闭合态只提示拆卡')
+  check(!(await bodyText()).includes('共同歌曲：'), '⑩ 闭合时不显示完整用户资料')
   check((await bodyText()).includes('临时同频房间') || (await bodyText()).includes('匹配进行中'), '⑩ 同频页展示正在进行的匹配或房间')
   check(await fitsScreens(1.5), '⑩ 同频页不超过 1.5 屏纵向堆叠')
   check(await tapTargetsOk(), '⑩ 同频页主点击区高度合格')
   await capture('09-sync.png')
   check(
-    await evaluate(`(() => {
-      const el = [...document.querySelectorAll('button')].find((b) => (b.innerText || '').includes('推荐理由：'));
-      if (!el) return false;
-      el.scrollIntoView({ block: 'center' });
-      el.click();
-      return true;
-    })()`),
-    '⑩ 推荐卡片可点开',
+    await evaluate(`(() => { const el = document.querySelector('[data-signal-deck] [role="button"]'); if (!el) return false; el.click(); return true })()`),
+    '⑩ 卡片可以点开',
   )
-  check(await waitForText('四维评分组成', 10000), '⑩ 点开卡片通过 Bottom Sheet 看详细解释')
-  await clickText('关闭弹窗')
+  check(await waitForElement('[data-signal-deck][data-deck-phase="revealed"]', 6000), '⑩ 开卡动画后进入揭晓态')
+  check(await waitForText('共同歌曲：'), '⑩ 揭晓后展示共同歌曲')
+  check(await waitForText('让 Agent 先聊'), '⑩ 揭晓后给出主按钮「让 Agent 先聊」')
+  check(await waitForText('公开场合见面 · 双向确认'), '⑩ 揭晓后给出安全边界小字')
+  check(
+    await evaluate(`(() => { const el = [...document.querySelectorAll('button')].find((b) => (b.innerText || '').includes('换一张')); if (!el) return false; el.click(); return true })()`),
+    '⑩「换一张」可点击',
+  )
+  check(await waitForText('第 2 张 /', 6000), '⑩ 换一张后进度前进')
+  check(await waitForElement('[data-signal-deck][data-deck-phase="sealed"]', 4000), '⑩ 换一张后回到未拆封状态')
+
+  // 连续换卡回归保护：换卡后 swap 必须回到 idle，否则第二次「换一张」会被静默吞掉。
+  check(
+    await evaluate(`(() => { const el = document.querySelector('[data-signal-deck] [role="button"]'); if (!el) return false; el.click(); return true })()`),
+    '⑩ 第 2 张可以继续拆开',
+  )
+  check(await waitForElement('[data-signal-deck][data-deck-phase="revealed"]', 6000), '⑩ 第 2 张进入揭晓态')
+  check(
+    await evaluate(`(() => { const el = [...document.querySelectorAll('button')].find((b) => (b.innerText || '').includes('换一张')); if (!el) return false; el.click(); return true })()`),
+    '⑩ 「换一张」可连续点击',
+  )
+  check(await waitForText('第 3 张 /', 6000), '⑩ 第二次换一张推进到第 3 张')
 
   step('⑪ 消息：Agent 通知 / 群聊 / 私聊 / 系统通知')
   await goto('/messages')

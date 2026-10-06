@@ -46,8 +46,10 @@ logs/
 *.key
 credentials.json
 
-# 本地评审授权音频：整个目录仅留在开发机，不进入 Git
-frontend/public/demo-audio-local/
+# 本地评审授权音频：音频仅留在开发机，只提交放置说明
+frontend/public/demo-audio-local/*
+!frontend/public/demo-audio-local/README.md
+!frontend/public/demo-audio-local/README.txt
 .env.local
 *.mp3
 *.m4a

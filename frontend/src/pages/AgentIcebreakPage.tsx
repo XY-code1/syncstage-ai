@@ -27,6 +27,7 @@ import {
 } from '../lib/icebreak'
 import { useProfile } from '../store/profile'
 import { useSession } from '../store/session'
+import { matchCandidates, revealCandidateById } from '../data/revealCandidates'
 
 /**
  * 双 Agent 破冰对话页。
@@ -53,14 +54,17 @@ export function AgentIcebreakPage() {
   const { profile } = useProfile()
 
   const concert = demoConcerts.find((item) => item.id === concertId)
+  const revealCandidate = revealCandidateById(candidateId)
+  const revealIndex = matchCandidates.findIndex((item) => item.candidateId === candidateId)
   const candidate = useMemo(
-    () => agent?.rankedCandidates.find((item) => item.userId === candidateId) ?? agent?.rankedCandidates[0] ?? null,
-    [agent, candidateId],
+    () => revealIndex >= 0 ? agent?.rankedCandidates[revealIndex] ?? null : agent?.rankedCandidates.find((item) => item.userId === candidateId) ?? null,
+    [agent, candidateId, revealIndex],
   )
 
   const meName = profile.nickname || '你'
-  const peerName = candidate?.candidate.nickname ?? '同频搭子'
-  const sharedAudio = useMemo(() => candidate?.sharedSongs.map(localDemoAudioByTitle).filter((track): track is NonNullable<typeof track> => Boolean(track)) ?? [], [candidate])
+  const peerName = revealCandidate?.displayName ?? candidate?.candidate.nickname ?? '同频搭子'
+  const sharedSongs = useMemo(() => revealCandidate ? [revealCandidate.sharedSong] : candidate?.sharedSongs ?? [], [candidate, revealCandidate])
+  const sharedAudio = useMemo(() => sharedSongs.map(localDemoAudioByTitle).filter((track): track is NonNullable<typeof track> => Boolean(track)), [sharedSongs])
 
   const steps = useMemo(() => {
     if (!candidate) return []
@@ -68,15 +72,15 @@ export function AgentIcebreakPage() {
       { me: meName, peer: peerName },
       {
         concertTitle: concert?.title ?? '同场演出',
-        sharedSongs: candidate.sharedSongs,
+        sharedSongs,
         meetingTime: concert?.meetingPoint.time ?? '18:50（开场前 40 分钟）',
         meetingPoint: concert?.meetingPoint.name ?? '公开的集合点',
         safety: candidate.sharedSafety[0] ?? '只在公开场合见面',
         // 没有 musicBasis（例如后端模式）时，只要真的拿到了共同歌曲就正常引用，不误报「依据不足」
-        hasMusicBasis: candidate.musicBasis ? candidate.musicBasis === 'rich' : candidate.sharedSongs.length > 0,
+        hasMusicBasis: sharedSongs.length > 0,
       },
     )
-  }, [candidate, concert, meName, peerName])
+  }, [candidate, concert, meName, peerName, sharedSongs])
 
   const [cursor, setCursor] = useState(-1)
   const [typing, setTyping] = useState<IcebreakTyping | null>(null)
@@ -214,14 +218,9 @@ export function AgentIcebreakPage() {
         <span className='flex h-6 w-6 items-center justify-center rounded-full bg-brand-500/12 text-[11px] text-brand-300'>
           <SparkleIcon className='h-3.5 w-3.5' />
         </span>
-        <Avatar
-          name={candidate.candidate.nickname}
-          from={candidate.candidate.avatar.from}
-          to={candidate.candidate.avatar.to}
-          size={34}
-        />
+        {revealCandidate ? <img src={`${import.meta.env.BASE_URL}${revealCandidate.avatar}`} alt={`${peerName}的Demo头像`} className='h-[34px] w-[34px] rounded-full border border-white/60 object-cover' /> : <Avatar name={peerName} from={candidate.candidate.avatar.from} to={candidate.candidate.avatar.to} size={34} />}
         <div className='ml-1 min-w-0 flex-1 text-right'>
-          <p className='truncate text-[13px] text-white/75'>{meName} 与 {candidate.candidate.nickname}</p>
+          <p className='truncate text-[13px] text-white/75'>{meName} 与 {peerName}</p>
           <p className='truncate text-[11.5px] text-brand-300'>Agent 先对齐 · 真人再确认</p>
         </div>
       </div>
@@ -242,7 +241,7 @@ export function AgentIcebreakPage() {
             <div className='mt-3 space-y-1.5'>
               {[
                 `共同演出：${concert?.title ?? '同场演出'}`,
-                `共同歌曲：${sharedSongLabel(candidate.sharedSongs.slice(0, 2), '暂无足够音乐依据')}`,
+                `共同歌曲：${sharedSongLabel(sharedSongs.slice(0, 2), '暂无足够音乐依据')}`,
                 `到场时间：提前约 40 分钟 · ${concert?.meetingPoint.time ?? ''}`,
                 `公开集合点：${concert?.meetingPoint.name ?? '公开区域'}`,
               ].map((line) => (
@@ -261,7 +260,7 @@ export function AgentIcebreakPage() {
 
         {candidate ? (
           <div className='space-y-2'>
-            <MusicBasisNote basis={candidate.musicBasis} songs={candidate.sharedSongs} />
+            <MusicBasisNote basis={candidate.musicBasis} songs={sharedSongs} />
             <OfficialPlaylistSource compact />
             <DemoMusicPlayer tracks={sharedAudio} reason='Agent 已核对的共同歌曲' compact />
           </div>

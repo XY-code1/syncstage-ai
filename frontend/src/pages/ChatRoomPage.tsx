@@ -77,7 +77,7 @@ export function ChatRoomPage() {
   // 真人与真人的私聊：不接任何 AI 自动回复，只推进"发送中 → 已送达 → 等待对方回复"。
   const isDirect = thread?.kind === 'dm'
   // 「触发模拟回复」只出现在真人私聊里：本构建的所有联系人都来自本地虚构 Demo 数据，
-  // 触发出来的消息一定带「模拟联系人」标记，绝不冒充真人、也不冒充模型。
+  // 触发出来的消息一定带「Demo模拟回复」标记，绝不冒充真人、也不冒充模型。
   const demoMode = isDirect
   const lastMessage = [...messages].reverse().find((message) => !message.system)
   const waitingReply = Boolean(isDirect && lastMessage?.mine && !lastMessage?.pending)
@@ -122,7 +122,7 @@ export function ChatRoomPage() {
   }
 
   return (
-    <div className='flex h-screen flex-col bg-stage-950'>
+    <div data-page='human-chat' className='flex h-[100dvh] flex-col overflow-hidden bg-stage-950'>
       <header className='safe-top sticky top-0 z-30 border-b border-white/6 bg-stage-950/94 px-3 pb-2.5 pt-2 backdrop-blur-xl'>
         <div className='flex items-center gap-2.5'>
           <button
@@ -552,7 +552,7 @@ function MessageRow({
           ) : null}
           {message.simulated ? (
             <span className='rounded-pill border border-warm-400/40 bg-warm-400/12 px-1.5 py-[1px] text-[9px] text-warm-400'>
-              模拟联系人
+              Demo模拟回复
             </span>
           ) : null}
           {message.failed ? <span className='text-rose-300'>· 发送失败</span> : null}
