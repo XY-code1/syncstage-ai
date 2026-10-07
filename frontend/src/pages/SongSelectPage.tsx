@@ -70,10 +70,13 @@ export function SongSelectPage() {
           <p>{track.artist}</p>
           <div className='immersive-song-tags'>{track.mood.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}</div>
           {local ? (
-            <div className='immersive-song-progress'>
-              <span>{clock(active ? player.currentTime : 0)}</span>
-              <input aria-label='播放进度' type='range' min='0' max={Math.max(player.duration || 30, 1)} value={active ? player.currentTime : 0} onChange={(event) => player.seek(Number(event.target.value))} />
-              <span>0:30</span>
+            <div>
+              <div className='immersive-song-progress'>
+                <span>{clock(active ? player.currentTime : 0)}</span>
+                <input aria-label='播放进度' type='range' min='0' max={Math.max(player.duration || 30, 1)} value={active ? player.currentTime : 0} onChange={(event) => player.seek(Number(event.target.value))} />
+                <span>0:30</span>
+              </div>
+              <p className='mt-1 text-[11px] text-white/65'>Demo 试听片段，不代表 QQ 音乐实际音源 · <a href={track.qqMusicUrl} target='_blank' rel='noopener noreferrer' className='text-[#9df5d3] underline underline-offset-2'>QQ音乐搜索试听</a></p>
             </div>
           ) : (
             <a className='immersive-song-official' href={track.qqMusicUrl} target='_blank' rel='noopener noreferrer'>在QQ音乐试听</a>

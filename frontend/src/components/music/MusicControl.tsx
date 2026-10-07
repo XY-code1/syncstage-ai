@@ -1,5 +1,4 @@
 import { localDemoAudioByKey } from '../../data/localDemoAudioManifest'
-import { OFFICIAL_PLAYLIST_URL } from '../../data/officialHackathonPlaylist'
 import { cn } from '../../lib/cn'
 import { MuteIcon, PauseIcon, PlayIcon, VolumeIcon } from '../icons'
 import { useAudioPlayer, type AudioCue } from './DemoMusicPlayer'
@@ -45,7 +44,7 @@ export function MusicControl({ compact = false, className }: { compact?: boolean
       {player.fallback ? (
         <a
           data-official-audio-fallback
-          href={OFFICIAL_PLAYLIST_URL}
+          href={track.qqMusicUrl}
           target='_blank'
           rel='noopener noreferrer'
           className='flex h-9 items-center rounded-full px-2.5 text-[11.5px] font-semibold text-brand-300'

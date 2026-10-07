@@ -6,4 +6,8 @@ export const LOCAL_DEMO_AUDIO_MANIFEST = FEATURED_TRACKS
 export const localDemoAudioByTitle = trackByTitle
 export const localDemoAudioByKey = trackById
 
-export const LOCAL_DEMO_AUDIO_ENABLED = import.meta.env.VITE_ENABLE_LOCAL_AUDIO === 'true'
+/**
+ * Public builds use the committed original demo cue. Set this to `false` only
+ * when a deployment intentionally wants links-only behaviour.
+ */
+export const LOCAL_DEMO_AUDIO_ENABLED = import.meta.env.VITE_ENABLE_LOCAL_AUDIO !== 'false'

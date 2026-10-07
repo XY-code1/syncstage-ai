@@ -1,4 +1,4 @@
-import { OFFICIAL_PLAYLIST_BADGE, OFFICIAL_PLAYLIST_URL, officialTrackByTitle } from './officialHackathonPlaylist'
+import { OFFICIAL_PLAYLIST_BADGE, officialTrackByTitle } from './officialHackathonPlaylist'
 
 export type ParticlePreset = 'snow-drift' | 'firework-burst' | 'city-scan'
 
@@ -16,13 +16,14 @@ export type Track = {
   sourceLabel: string
 }
 
-const localPreview = (filename: string) =>
-  `${import.meta.env.BASE_URL}demo-audio-local/${encodeURIComponent(filename)}`
+const publicDemoPreview = () => `${import.meta.env.BASE_URL}audio/demo-preview.mp3`
+
+export const qqMusicSearchUrl = (title: string, artist: string) =>
+  `https://y.qq.com/n/ryqq/search?w=${encodeURIComponent(`${title} ${artist}`)}`
 
 const makeTrack = (
   title: string,
   artist: string,
-  filename: string,
   accentColor: string,
   particlePreset: ParticlePreset,
 ): Track => {
@@ -35,17 +36,20 @@ const makeTrack = (
     mood: official ? [official.mood, ...official.tags] : [],
     accentColor,
     particlePreset,
-    qqMusicUrl: OFFICIAL_PLAYLIST_URL,
-    localPreviewSrc: localPreview(filename),
+    // Use a durable search URL rather than guessing a song-specific QQ Music URL.
+    qqMusicUrl: qqMusicSearchUrl(title, artist),
+    // A self-made public cue enables online playback. It is never presented as
+    // the official song, and each UI surface labels the limitation.
+    localPreviewSrc: publicDemoPreview(),
     sourceLabel: OFFICIAL_PLAYLIST_BADGE,
   }
 }
 
 /** 由官方参考歌单元数据派生；本文件只补充本地 Demo 播放与视觉字段。 */
 export const FEATURED_TRACKS: Track[] = [
-  makeTrack('北京昨夜下了雪', 'Lambert凌杰', 'beijing-snow.mp3', '#67e8f9', 'snow-drift'),
-  makeTrack('烟花', '永彬Ryan.B', 'fireworks.mp3', '#31f58a', 'firework-burst'),
-  makeTrack('发个定位', '永彬Ryan.B', 'send-location.mp3', '#a78bfa', 'city-scan'),
+  makeTrack('北京昨夜下了雪', 'Lambert凌杰', '#67e8f9', 'snow-drift'),
+  makeTrack('烟花', '永彬Ryan.B', '#31f58a', 'firework-burst'),
+  makeTrack('发个定位', '永彬Ryan.B', '#a78bfa', 'city-scan'),
 ]
 
 export const trackById = (id: string): Track => FEATURED_TRACKS.find((track) => track.id === id) ?? FEATURED_TRACKS[0]

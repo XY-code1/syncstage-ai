@@ -497,6 +497,10 @@ export function DemoMusicPlayer({ tracks, reason, compact = false, className }: 
             <span className='shrink-0 text-[11px] tabular-nums text-white/55'>{clock(current)} / {clock(duration)}</span>
           </div>
           {!compact ? <label className='flex min-h-11 items-center gap-2 text-[12px] text-white/55'><span>音量</span><input aria-label='音量' type='range' min='0' max='1' step='0.05' value={player.volume} onChange={(event) => player.setVolume(Number(event.target.value))} className='flex-1 accent-[#31f58a]' /></label> : null}
+          <div className='flex items-center justify-between gap-3 text-[11px] text-white/45'>
+            <span>Demo 试听片段，不代表 QQ 音乐实际音源</span>
+            <a href={track.qqMusicUrl} target='_blank' rel='noopener noreferrer' className='shrink-0 text-brand-300 underline-offset-2 hover:underline'>QQ音乐搜索</a>
+          </div>
         </div>
       ) : (
         <div className='mt-2'>

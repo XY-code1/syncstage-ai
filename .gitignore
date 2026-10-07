@@ -63,6 +63,11 @@ frontend/public/demo-audio-local/*
 *.mflac
 *.qmc0
 *.qmc3
+# A small, original synthesized cue is intentionally public so hosted demos
+# can verify player controls without shipping local review audio.
+!frontend/public/audio/
+!frontend/public/audio/README.md
+!frontend/public/audio/demo-preview.mp3
 .vercel
 
 # Local capture files; curated product documentation already tracked remains unchanged.
