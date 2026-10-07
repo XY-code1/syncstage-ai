@@ -1,11 +1,24 @@
 import { fileURLToPath, URL } from 'node:url'
+import { rmSync } from 'node:fs'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
   base: process.env.VITE_BASE_PATH || '/',
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    // Vite copies public/ verbatim. Local review audio must stay on the developer
+    // machine, so remove it only from production output; dev server still supports it.
+    {
+      name: 'exclude-local-demo-audio-from-build',
+      apply: 'build',
+      closeBundle() {
+        rmSync(fileURLToPath(new URL('./dist/demo-audio-local', import.meta.url)), { recursive: true, force: true })
+      },
+    },
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

@@ -225,7 +225,7 @@ const FALLBACK_REASON_TEXT: Record<string, string> = {
   ready: '已启用',
   forbidden: 'AI_FORCE_FALLBACK=1，显式 Demo 回退',
   no_model: '后端没有配置 OPENAI_MODEL',
-  no_api_key: '远程模型缺少 OPENAI_API_KEY',
+  no_api_key: '远程模型缺少服务端凭据',
 }
 
 function AgentSection() {

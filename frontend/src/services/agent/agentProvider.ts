@@ -25,7 +25,7 @@ export const AGENT_MODE_LABEL: Record<AgentMode, string> = {
 export const AGENT_NOT_CONFIGURED_TITLE = '尚未配置大模型服务'
 
 const UNAVAILABLE_REASONS: Record<string, string> = {
-  no_api_key: '后端没有配置 API Key（backend/.env 的 LLM_API_KEY），无法调用大模型',
+  no_api_key: '后端没有配置模型服务凭据，无法调用大模型',
   no_model: '后端没有配置模型名（backend/.env 的 LLM_MODEL）',
   forbidden: '后端显式关闭了大模型（AI_FORCE_FALLBACK）',
   agent_mode_mock: '后端 AGENT_MODE=mock，没有开启真实模型模式',

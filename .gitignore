@@ -63,3 +63,9 @@ frontend/public/demo-audio-local/*
 *.mflac
 *.qmc0
 *.qmc3
+.vercel
+
+# Local capture files; curated product documentation already tracked remains unchanged.
+docs/screenshots/local-*.png
+docs/screenshots/local-*.jpg
+docs/screenshots/*.tmp.png

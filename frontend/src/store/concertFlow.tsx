@@ -18,12 +18,16 @@ export interface ConcertFlowState {
 const EMPTY: ConcertFlowState = { consentStatus: 'unknown', consentScopes: [], intent: null, agentRunId: null, selectedCandidateId: null, handshakeStatus: 'idle', roomId: null, skippedCandidateIds: [], negativeFeedback: [] }
 const KEY = 'syncstage.concertFlow.v1'
 type Store = Record<string, ConcertFlowState>
-const Context = createContext<{ get: (id: string) => ConcertFlowState; patch: (id: string, value: Partial<ConcertFlowState>) => void } | null>(null)
+const Context = createContext<{ get: (id: string) => ConcertFlowState; patch: (id: string, value: Partial<ConcertFlowState>) => void; reset: (id: string) => void } | null>(null)
 
 export function ConcertFlowProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<Store>(() => { try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} } })
   useEffect(() => { localStorage.setItem(KEY, JSON.stringify(store)) }, [store])
-  const value = useMemo(() => ({ get: (id: string) => store[id] ?? EMPTY, patch: (id: string, next: Partial<ConcertFlowState>) => setStore((prev) => ({ ...prev, [id]: { ...(prev[id] ?? EMPTY), ...next } })) }), [store])
+  const value = useMemo(() => ({
+    get: (id: string) => store[id] ?? EMPTY,
+    patch: (id: string, next: Partial<ConcertFlowState>) => setStore((prev) => ({ ...prev, [id]: { ...(prev[id] ?? EMPTY), ...next } })),
+    reset: (id: string) => setStore((prev) => { const next = { ...prev }; delete next[id]; return next }),
+  }), [store])
   return <Context.Provider value={value}>{children}</Context.Provider>
 }
-export function useConcertFlow(concertId: string) { const ctx = useContext(Context); if (!ctx) throw new Error('ConcertFlowProvider missing'); return { flow: ctx.get(concertId), patchFlow: (next: Partial<ConcertFlowState>) => ctx.patch(concertId, next) } }
+export function useConcertFlow(concertId: string) { const ctx = useContext(Context); if (!ctx) throw new Error('ConcertFlowProvider missing'); return { flow: ctx.get(concertId), patchFlow: (next: Partial<ConcertFlowState>) => ctx.patch(concertId, next), resetFlow: () => ctx.reset(concertId) } }

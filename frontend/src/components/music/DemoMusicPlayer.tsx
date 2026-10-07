@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { LOCAL_DEMO_AUDIO_ENABLED, localDemoAudioByKey, type LocalDemoAudio } from '../../data/localDemoAudioManifest'
 import { CUE_GAIN, cueTrack, type AudioCue } from '../../data/tracks'
 import { cn } from '../../lib/cn'
+import { useAudioReactiveEngine } from './AudioReactiveProvider'
 
 export type { AudioCue }
 
@@ -83,6 +84,7 @@ const MusicPlayerContext = createContext<PlayerApi | null>(null)
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
 
 export function AudioProvider({ children }: { children: ReactNode }) {
+  const { attach: attachReactiveAudio, resume: resumeReactiveAudio } = useAudioReactiveEngine()
   const [state, setState] = useState<PlayerState>(() => {
     let selected = initialState.selectedTrackId
     try {
@@ -162,6 +164,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       el.volume = 0
       el.setAttribute('playsinline', 'true')
       const deck: Deck = { el, key: null }
+      attachReactiveAudio(el)
       el.addEventListener('loadedmetadata', () => {
         if (currentSlotRef.current !== slot) return
         const total = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : PREVIEW_LIMIT_SECONDS
@@ -191,7 +194,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     }
     decksRef.current = { a: make('a'), b: make('b') }
     return decksRef.current
-  }, [])
+  }, [attachReactiveAudio])
 
   const startTrack = useCallback(
     async (track: LocalDemoAudio, options: { cue: AudioCue | null; fadeMs?: number }) => {
@@ -290,10 +293,11 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   }, [fadeTo])
 
   const unlock = useCallback(() => {
+    resumeReactiveAudio()
     armedRef.current = true
     ensureDecks()
     setState((prev) => (prev.armed ? prev : { ...prev, armed: true }))
-  }, [ensureDecks])
+  }, [ensureDecks, resumeReactiveAudio])
 
   const playCue = useCallback(
     async (cue: AudioCue) => {

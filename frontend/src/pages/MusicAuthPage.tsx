@@ -8,6 +8,7 @@ import { AUTHORIZATION_SCOPES } from '../lib/tmeMock'
 import { useSession } from '../store/session'
 import { useConcertFlow } from '../store/concertFlow'
 import type { ScopeMeta } from '../types'
+import { useQQMusicAuth } from '../store/qqMusicAuth'
 
 /** 每项授权的详细解释只在 Bottom Sheet 里展开，一级页面保持单屏可读完 */
 const EXPLAIN: Record<string, { what: string; why: string; not: string }> = {
@@ -46,9 +47,10 @@ export function MusicAuthPage() {
   const [declined, setDeclined] = useState(false)
   const [explainScope, setExplainScope] = useState<ScopeMeta | null>(null)
   const { flow, patchFlow } = useConcertFlow(concertId)
+  const { qqMusicUser, authorize, revoke, authorizing, error } = useQQMusicAuth()
 
-  if (flow.consentStatus === 'granted' && !location.search.includes('edit=1')) {
-    return <Navigate to={`/concert/${concertId}/task`} replace />
+  if (qqMusicUser.authorized && flow.consentStatus === 'granted' && !location.search.includes('edit=1')) {
+    return <Navigate to={`/concert/${concertId}/select-song`} replace />
   }
 
   const canContinue = scopes.length > 0
@@ -68,6 +70,7 @@ export function MusicAuthPage() {
         <p className='mt-1.5 text-[11.5px] leading-relaxed text-white/50'>
           只用于计算同场观众的音乐重合度，不会公开展示。可以只授权其中几项，Agent 会在可用范围内工作。
         </p>
+        <p className='mt-1 text-[10.5px] text-white/40'>概念功能Demo·非官方</p>
 
         {declined ? (
           <div className='mt-3 rounded-2xl border border-warm-400/30 bg-warm-400/[0.07] px-3.5 py-3'>
@@ -142,21 +145,25 @@ export function MusicAuthPage() {
         <Button
           size='lg'
           full
-          disabled={!canContinue}
+          disabled={!canContinue || authorizing}
           icon={<SparkleIcon className='h-4 w-4' />}
-          onClick={() => {
+          onClick={async () => {
+            const ok = qqMusicUser.authorized || await authorize()
+            if (!ok) return
+            setScopes(scopes)
             completeAuthorization()
             patchFlow({ consentStatus: 'granted', consentScopes: scopes })
-            navigate(`/concert/${concertId}/task`)
+            navigate(`/concert/${concertId}/select-song`)
           }}
         >
-          授权并继续
+          {authorizing ? '正在载入Demo画像…' : '授权并继续'}
         </Button>
         <Button
           variant='ghost'
           size='sm'
           full
           onClick={() => {
+            if (qqMusicUser.authorized) void revoke()
             setScopes([])
             setDeclined(true)
             patchFlow({ consentStatus: 'declined', consentScopes: [] })
@@ -167,6 +174,7 @@ export function MusicAuthPage() {
         <p className='pb-1 pt-1 text-center text-[10.5px] text-white/40'>
           {canContinue ? '不涉及登录、支付与真实票务' : '至少授权一项音乐数据才能继续'}
         </p>
+        {error ? <p role='alert' className='pb-1 text-center text-[11px] text-rose-300'>{error}</p> : null}
       </footer>
 
       <Sheet

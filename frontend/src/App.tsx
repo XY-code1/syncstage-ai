@@ -32,6 +32,8 @@ import { ConcertFlowProvider } from './store/concertFlow'
 import { ProfileProvider } from './store/profile'
 import { AudioProvider } from './components/music/DemoMusicPlayer'
 import { SongSelectPage } from './pages/SongSelectPage'
+import { QQMusicAuthStateProvider } from './store/qqMusicAuth'
+import { AudioReactiveProvider } from './components/music/AudioReactiveProvider'
 
 /** 消息中心需要知道当前房间状态，因此放在 SessionProvider 内部 */
 function SocialHost({ children }: { children: ReactNode }) {
@@ -45,9 +47,11 @@ function SocialHost({ children }: { children: ReactNode }) {
 
 export default function App() {
   return (
+    <AudioReactiveProvider>
     <AudioProvider>
     <SessionProvider>
       <ConcertFlowProvider>
+        <QQMusicAuthStateProvider>
         <ProfileProvider>
           <SocialHost>
           <AppFrame>
@@ -106,8 +110,10 @@ export default function App() {
             <DemoConsole />
           </SocialHost>
         </ProfileProvider>
+        </QQMusicAuthStateProvider>
       </ConcertFlowProvider>
     </SessionProvider>
     </AudioProvider>
+    </AudioReactiveProvider>
   )
 }

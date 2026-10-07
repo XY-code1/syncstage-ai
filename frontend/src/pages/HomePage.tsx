@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MyProfileAvatar } from '../components/UserAvatar'
 import { useAudioPlayer } from '../components/music/DemoMusicPlayer'
-import { WaveformBars } from '../components/musicVisuals'
+import { AudioSpectrumBars, HomeAudioReactiveLayer } from '../components/music/AudioReactiveVisuals'
+import { useAudioReactive } from '../components/music/AudioReactiveProvider'
 import { LOCAL_DEMO_AUDIO_ENABLED } from '../data/localDemoAudioManifest'
 import { cueTrack, trackById } from '../data/tracks'
 import { demoConcerts } from '../data/demoData'
 import { useSession } from '../store/session'
+import { QQMusicAuthorizationSheet } from '../components/QQMusicAuthorizationSheet'
+import { useQQMusicAuth } from '../store/qqMusicAuth'
 
 const HOME_LISTENERS = 128
 const avatars = [0, 1, 2, 3]
@@ -14,7 +17,10 @@ const avatars = [0, 1, 2, 3]
 export function HomePage() {
   const navigate = useNavigate()
   const player = useAudioPlayer()
+  const reactive = useAudioReactive()
   const { concertId, selectConcert } = useSession()
+  const { qqMusicUser } = useQQMusicAuth()
+  const [authorizationOpen, setAuthorizationOpen] = useState(false)
   const concert = demoConcerts.find(event => event.id === concertId) ?? demoConcerts[0]
   const [now, setNow] = useState(Date.now())
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer) }, [])
@@ -24,10 +30,16 @@ export function HomePage() {
   const entryTrack = cueTrack('entry')
   const track = player.activeKey ? trackById(player.activeKey) : entryTrack
   const local = LOCAL_DEMO_AUDIO_ENABLED && !player.fallback
-  const enter = () => { selectConcert(concert.id); navigate(`/concert/${concert.id === 'night-flight' ? 'night-voyage' : concert.id}/select-song`) }
+  const targetId = concert.id === 'night-flight' ? 'night-voyage' : concert.id
+  const enter = () => {
+    selectConcert(concert.id)
+    if (!qqMusicUser.authorized) { setAuthorizationOpen(true); return }
+    navigate(`/concert/${targetId}/select-song`)
+  }
 
   return <div data-home-summer className='summer-home relative min-h-[calc(100dvh-64px)] overflow-hidden text-white'>
     <img src={`${import.meta.env.BASE_URL}visuals/summer-concert-home.webp`} alt='日落海岸音乐节舞台、灯光与人群' className='pointer-events-none absolute inset-0 h-full w-full object-cover' />
+    <HomeAudioReactiveLayer />
     <div className='pointer-events-none absolute inset-0 bg-gradient-to-b from-[#28326b]/20 via-transparent to-[#15283c]/80' />
     <header className='relative z-10 flex h-14 items-center gap-2 px-5'>
       <span className='flex h-7 w-7 items-center justify-center rounded-full bg-[#ffe637] text-lg font-bold text-[#00ab6b]'>♪</span>
@@ -53,13 +65,14 @@ export function HomePage() {
         </div>
         <button type='button' onClick={enter} className='mt-4 flex min-h-[56px] w-full items-center justify-center gap-3 rounded-full border border-[#b6ffdd]/70 bg-[#33f8ac] text-[19px] font-black text-[#062a26] shadow-[0_0_28px_rgba(33,255,170,.35)]'>✧ 进入夜航现场 <span className='text-2xl'>›</span></button>
         <p className='my-3 text-center text-[11px] tracking-[.13em] text-white/85'>音乐让陌生的我们，在此刻相遇</p>
-        <div data-home-music-bar className='flex min-h-[68px] items-center gap-3 rounded-[22px] border border-white/45 bg-[#4b527e]/50 p-2.5 backdrop-blur-lg'>
+        <div data-home-music-bar className='flex min-h-[68px] items-center gap-3 rounded-[22px] border border-white/45 bg-[#4b527e]/50 p-2.5 backdrop-blur-lg transition-shadow duration-300' style={{ boxShadow: `0 0 ${10 + reactive.normalizedBass * 24}px rgba(255,155,85,${0.12 + reactive.normalizedBass * 0.24})` }}>
           <img src={`${import.meta.env.BASE_URL}visuals/summer-concert-home.webp`} alt='Demo 音乐视觉封面' className='h-12 w-12 rounded-xl object-cover' />
           <div className='min-w-0 flex-1'><p className='truncate text-[16px] font-bold'>{track.title}</p><p className='mt-1 text-[12px] text-white/75'>{track.artist}</p></div>
-          <WaveformBars bars={9} height={24} active={player.playing} accent='#c6bdff' />
-          {local ? <button type='button' aria-label={player.playing ? '暂停音乐' : '试听音乐'} onClick={() => { player.unlock(); if(player.playing) player.pause(); else void player.play(track) }} className='flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/60 text-xl'>{player.playing ? 'Ⅱ' : '▶'}</button> : <a href={track.qqMusicUrl} target='_blank' rel='noopener noreferrer' className='flex min-h-11 shrink-0 items-center rounded-full border border-white/40 px-2 text-[11px]'>QQ音乐试听</a>}
+          <AudioSpectrumBars className='w-[58px]' />
+          {local ? <button type='button' aria-label={player.playing ? '暂停音乐' : '试听音乐'} onClick={() => { player.unlock(); if(player.playing) player.pause(); else void player.play(track) }} className='flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/60 text-xl'>{player.playing ? 'Ⅱ' : '▶'}</button> : <a href={track.qqMusicUrl} target='_blank' rel='noopener noreferrer' className='flex min-h-11 shrink-0 flex-col items-center justify-center rounded-full border border-white/40 px-2 text-[10px]'>{player.fallback ? <span>演示音频暂不可用</span> : null}<span>QQ音乐试听</span></a>}
         </div>
       </section>
     </main>
+    <QQMusicAuthorizationSheet open={authorizationOpen} onClose={() => setAuthorizationOpen(false)} onAuthorized={() => { setAuthorizationOpen(false); navigate(`/concert/${targetId}/select-song`) }} />
   </div>
 }

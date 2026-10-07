@@ -6,8 +6,9 @@ import { ClockIcon, MapPinIcon, MusicIcon, SparkleIcon } from '../components/ico
 import { fetchConcert } from '../lib/api'
 import { messageOf, useSession } from '../store/session'
 import type { Concert } from '../types'
-import { useConcertFlow } from '../store/concertFlow'
 import { useMusicPlayer } from '../components/music/DemoMusicPlayer'
+import { QQMusicAuthorizationSheet } from '../components/QQMusicAuthorizationSheet'
+import { useQQMusicAuth } from '../store/qqMusicAuth'
 
 /** 把 2026-10-18 19:30 压成演出页要用的「10月18日 19:30」。 */
 function shortDateTime(value: string): string {
@@ -71,8 +72,9 @@ export function ConcertDetailPage() {
   const { concertId = 'night-flight' } = useParams()
   const navigate = useNavigate()
   const player = useMusicPlayer()
-  const { selectConcert, authorized, agent, room, matchResumable, startNewMatch } = useSession()
-  const { flow } = useConcertFlow(concertId)
+  const { selectConcert, agent, room, matchResumable, startNewMatch } = useSession()
+  const { qqMusicUser } = useQQMusicAuth()
+  const [authorizationOpen, setAuthorizationOpen] = useState(false)
   const [concert, setConcert] = useState<Concert | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState('')
@@ -97,9 +99,7 @@ export function ConcertDetailPage() {
   // 只有会话未终结（未撤回 / 拒绝 / 过期）时才「回到同行方案」，否则从任务确认重新开始。
   const entryTarget = matchResumable
     ? `/concert/${concertId}/matches`
-    : authorized || flow.consentStatus === 'granted'
-      ? `/concert/${concertId}/task`
-      : `/concert/${concertId}/authorize`
+    : `/concert/${concertId}/select-song`
 
   /**
    * 主按钮：用这一次真实点击解锁浏览器音频（iPhone Safari 要求），
@@ -109,6 +109,10 @@ export function ConcertDetailPage() {
     player.unlock()
     void player.playCue('entry')
     if (!matchResumable && agent) startNewMatch()
+    if (!qqMusicUser.authorized) {
+      setAuthorizationOpen(true)
+      return
+    }
     navigate(entryTarget)
   }
 
@@ -177,7 +181,7 @@ export function ConcertDetailPage() {
                 icon={<SparkleIcon className='h-4 w-4' />}
                 onClick={enterNightFlight}
               >
-                进入夜航现场
+                寻找同频观众
               </Button>
             </Card>
 
@@ -192,6 +196,7 @@ export function ConcertDetailPage() {
           </div>
         ) : null}
       </main>
+      <QQMusicAuthorizationSheet open={authorizationOpen} onClose={() => setAuthorizationOpen(false)} onAuthorized={() => { setAuthorizationOpen(false); navigate(`/concert/${concertId}/select-song`) }} />
     </div>
   )
 }

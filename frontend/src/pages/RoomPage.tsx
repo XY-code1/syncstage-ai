@@ -43,6 +43,7 @@ import type { RoomState } from '../types'
 import { DemoMusicPlayer, useMusicPlayer } from '../components/music/DemoMusicPlayer'
 import { MusicControl } from '../components/music/MusicControl'
 import { localDemoAudioByKey, localDemoAudioByTitle } from '../data/localDemoAudioManifest'
+import { ImmersiveMusicStage } from '../components/music/ImmersiveMusicStage'
 
 /**
  * 同行房间 = 消息模块里的一个群聊。
@@ -475,7 +476,7 @@ export function RoomPage() {
   }
 
   return (
-    <div className='ai-stage mx-auto flex h-[100dvh] max-h-[100dvh] w-full max-w-[390px] flex-col overflow-hidden'>
+    <div className='ai-stage immersive-room mx-auto flex h-[100dvh] max-h-[100dvh] w-full max-w-[390px] flex-col overflow-hidden'>
       {/* 顶部栏：‹ 消息 / 房间名 / 人数·集合状态 / ··· */}
       <header className='safe-top z-30 shrink-0 border-b border-white/6 bg-stage-950/92 backdrop-blur-xl'>
         <div className='flex items-center gap-2 px-3 pb-2 pt-2.5'>
@@ -506,7 +507,7 @@ export function RoomPage() {
 
       {/* Demo 双身份横幅：只在开发 / 演示模式出现，用于两个浏览器同房间互发真人消息 */}
       {demoMode && (
-        <div className='mx-3 mt-2 shrink-0 rounded-xl border border-amber-300/25 bg-amber-300/[.06] px-2.5 py-1.5'>
+        <div className='room-demo mx-3 mt-2 shrink-0 rounded-xl border border-amber-300/25 bg-amber-300/[.06] px-2.5 py-1.5'>
           <div className='flex items-center gap-2'>
             <span className='h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300' />
             <span className='min-w-0 flex-1 whitespace-nowrap text-[11px] font-medium text-amber-100'>
@@ -533,12 +534,19 @@ export function RoomPage() {
         </div>
       )}
 
+      <div className='room-stage' aria-hidden='true'>
+        <ImmersiveMusicStage artwork={`${import.meta.env.BASE_URL}visuals/summer-concert-home.webp`} title={`共同心动曲 · ${selectedTrack.title}`} compact />
+        <span className='room-stage-person room-stage-person-a'><img src={`${import.meta.env.BASE_URL}avatars/candidate-orange.webp`} alt='' />木那啦啦</span>
+        <span className='room-stage-person room-stage-person-b'><img src={`${import.meta.env.BASE_URL}portraits/demo-orange.webp`} alt='' />Demo 访客</span>
+        <span className='room-stage-person room-stage-person-c'><img src={`${import.meta.env.BASE_URL}avatars/candidate-jiangli.webp`} alt='' />写歌的江离</span>
+      </div>
+
       {/* 一行集合状态卡：点开才是地图、成员确认与安全说明 */}
       <button
         type='button'
         onClick={() => setSheet('meeting')}
         aria-label='查看集合详情'
-        className='mx-3 mt-2 flex shrink-0 items-center gap-2.5 rounded-2xl border border-brand-500/25 bg-brand-500/[.07] px-3 py-2.5 text-left'
+        className='room-meeting mx-3 mt-2 flex shrink-0 items-center gap-2.5 rounded-2xl border border-brand-500/25 bg-brand-500/[.07] px-3 py-2.5 text-left'
       >
         <span className='flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-brand-300'>
           <MapPinIcon className='h-4 w-4' />
@@ -557,7 +565,7 @@ export function RoomPage() {
         ref={scrollRef}
         aria-label='同行房间消息'
         onScroll={(event) => writeJson(scrollKey, Math.round(event.currentTarget.scrollTop))}
-        className='no-scrollbar mt-2 flex min-h-0 flex-1 flex-col space-y-3 overflow-y-auto px-3 pb-3'
+        className='room-chat no-scrollbar mt-2 flex min-h-0 flex-1 flex-col space-y-3 overflow-y-auto px-3 pb-3'
       >
         {/* 消息少的时候把会话压到底部（像真实 IM）；消息变长后这个占位会自动收成 0 高度 */}
         <div className='min-h-0 flex-1' aria-hidden='true' />
@@ -595,7 +603,7 @@ export function RoomPage() {
       </div>
 
       {/* 底部输入区 */}
-      <footer className='safe-bottom z-30 shrink-0 border-t border-white/8 bg-stage-950/96 px-3 pt-2 backdrop-blur-xl'>
+      <footer className='room-footer safe-bottom z-30 shrink-0 border-t border-white/8 bg-stage-950/96 px-3 pt-2 backdrop-blur-xl'>
         {archived ? (
           <p className='py-3 text-center text-[12.5px] text-white/50'>房间已归档，只可查看历史消息</p>
         ) : !allConfirmed ? (

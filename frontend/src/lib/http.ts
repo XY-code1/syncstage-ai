@@ -1,7 +1,14 @@
 // 极薄的 HTTP 层：只负责 fetch + 超时 + 错误归一化。
 // 独立成模块，避免「api.ts <-> services/agent」互相 import 形成循环依赖。
 
-export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
+/**
+ * Development keeps the standalone FastAPI server on :8000. In a Vercel
+ * deployment the frontend and FastAPI services share one origin, so an empty
+ * base deliberately resolves requests such as `/api/health` on that origin.
+ * No server URL or secret is baked into the browser bundle.
+ */
+const configuredApiBase = String(import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/$/, '')
+export const API_BASE = configuredApiBase || (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '')
 
 export interface ApiErrorOptions {
   hint?: string
