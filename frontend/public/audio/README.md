@@ -1,9 +1,7 @@
-# Public Demo preview audio
+# 公开比赛演示音频
 
-`demo-preview.mp3` is a 24-second original synthesized ambient cue generated
-for SyncStage's public product demo. It is not a QQ Music recording, not a
-cover, and not derived from any official-playlist song.
+`night-voyage-preview.mp3` 是主办方允许用于本次比赛演示的指定试听文件，也是线上和本地播放器共用的唯一公开音频素材。
 
-The interface must label it **“Demo 试听片段，不代表 QQ 音乐实际音源”**. It may be
-used to verify player controls and audio-reactive visuals. Regenerate it with
-`frontend/scripts/generate-demo-preview.py` and a local `lameenc` installation.
+- 运行时路径：`/audio/night-voyage-preview.mp3`
+- 仅该文件允许随仓库发布；`frontend/public/demo-audio-local/` 中的其他本地音频仍受 `.gitignore` 保护。
+- 页面仍提供 QQ 音乐搜索跳转，方便用户前往官方服务试听完整歌曲。

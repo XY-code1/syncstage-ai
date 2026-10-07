@@ -16,7 +16,7 @@ export type Track = {
   sourceLabel: string
 }
 
-const publicDemoPreview = () => `${import.meta.env.BASE_URL}audio/demo-preview.mp3`
+const publicCompetitionPreview = () => `${import.meta.env.BASE_URL}audio/night-voyage-preview.mp3`
 
 export const qqMusicSearchUrl = (title: string, artist: string) =>
   `https://y.qq.com/n/ryqq/search?w=${encodeURIComponent(`${title} ${artist}`)}`
@@ -38,9 +38,9 @@ const makeTrack = (
     particlePreset,
     // Use a durable search URL rather than guessing a song-specific QQ Music URL.
     qqMusicUrl: qqMusicSearchUrl(title, artist),
-    // A self-made public cue enables online playback. It is never presented as
-    // the official song, and each UI surface labels the limitation.
-    localPreviewSrc: publicDemoPreview(),
+    // All tracks use the organizer-authorized competition preview so local and hosted
+    // playback resolve to the same stable public URL.
+    localPreviewSrc: publicCompetitionPreview(),
     sourceLabel: OFFICIAL_PLAYLIST_BADGE,
   }
 }
