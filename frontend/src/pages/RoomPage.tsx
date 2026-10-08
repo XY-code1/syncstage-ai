@@ -839,13 +839,13 @@ export function RoomPage() {
       </Sheet>
 
       {/* ---------------- 输入栏「＋」：Agent帮写 / 查看任务 / 共享歌曲 / 查看集合点 ---------------- */}
-      <Sheet open={sheet === 'plus'} onClose={() => setSheet('none')} title='更多操作' description='这些内容都不会自动发送，先填进输入框或打开面板确认。'>
+      <Sheet className='room-action-sheet bg-gradient-to-br from-[#3c416f]/95 via-[#513d6c]/95 to-[#7b4b4c]/95 backdrop-blur-2xl' open={sheet === 'plus'} onClose={() => setSheet('none')} title='更多操作' description='选择一个同行工具继续'>
         <div className='space-y-2'>
           {[
-            { key: 'agent' as const, icon: <SparkleIcon className='h-4 w-4 text-brand-300' />, title: 'Agent帮写', note: '只生成草稿，确认后才会发送' },
-            { key: 'tasks' as const, icon: <CheckIcon className='h-4 w-4 text-brand-300' />, title: '查看任务', note: `候场任务已完成 ${doneCount}/${tasks.length}` },
-            { key: 'share' as const, icon: <MusicIcon className='h-4 w-4 text-brand-300' />, title: '共享歌曲', note: '从这场演出的热门曲目里挑一首' },
-            { key: 'meeting' as const, icon: <MapPinIcon className='h-4 w-4 text-brand-300' />, title: '查看集合点', note: `${place} · ${meetTime}` },
+            { key: 'agent' as const, icon: <SparkleIcon className='h-4 w-4 text-[#e9a7ff]' />, title: 'Agent帮写', note: '只生成草稿，确认后才会发送' },
+            { key: 'tasks' as const, icon: <CheckIcon className='h-4 w-4 text-[#7ddcff]' />, title: '查看任务', note: `候场任务已完成 ${doneCount}/${tasks.length}` },
+            { key: 'share' as const, icon: <MusicIcon className='h-4 w-4 text-[#ffd477]' />, title: '共享歌曲', note: '从这场演出的热门曲目里挑一首' },
+            { key: 'meeting' as const, icon: <MapPinIcon className='h-4 w-4 text-[#ff9d83]' />, title: '查看集合点', note: `${place} · ${meetTime}` },
           ].map((item) => (
             <button
               key={item.key}

@@ -294,12 +294,14 @@ export function Sheet({
   description,
   onClose,
   children,
+  className,
 }: {
   open: boolean
   title: string
   description?: string
   onClose: () => void
   children: ReactNode
+  className?: string
 }) {
   if (!open) return null
 
@@ -311,7 +313,7 @@ export function Sheet({
         onClick={onClose}
         className='absolute inset-0 cursor-default bg-stage-950/80 backdrop-blur-sm'
       />
-      <div className='safe-bottom relative w-full max-w-[440px] animate-rise rounded-t-[26px] border-t border-white/12 bg-stage-900 px-5 pb-4 pt-5'>
+      <div className={cn('safe-bottom relative w-full max-w-[440px] animate-rise rounded-t-[26px] border-t border-white/12 bg-stage-900 px-5 pb-4 pt-5', className)}>
         <div className='mb-1 flex items-start justify-between gap-4'>
           <div>
             <p className='text-base font-semibold text-white'>{title}</p>
