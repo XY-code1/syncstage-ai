@@ -37,7 +37,7 @@ export function HomePage() {
     navigate(`/concert/${targetId}/select-song`)
   }
 
-  return <div data-home-summer className='summer-home relative min-h-[calc(100dvh-64px)] overflow-hidden text-white'>
+  return <div data-home-summer className='summer-home relative min-h-[100dvh] overflow-hidden text-white'>
     <img src={`${import.meta.env.BASE_URL}visuals/summer-concert-home.webp`} alt='日落海岸音乐节舞台、灯光与人群' className='pointer-events-none absolute inset-0 h-full w-full object-cover' />
     <HomeAudioReactiveLayer />
     <div className='pointer-events-none absolute inset-0 bg-gradient-to-b from-[#28326b]/20 via-transparent to-[#15283c]/80' />
@@ -47,7 +47,7 @@ export function HomePage() {
       <span className='rounded-full border border-white/45 px-2 py-1 text-[11px] text-white/85'>概念功能 Demo</span>
       <span className='ml-auto'><MyProfileAvatar size={32} /></span>
     </header>
-    <main className='relative z-10 flex min-h-[calc(100dvh-132px)] flex-col px-5 pb-5'>
+    <main className='relative z-10 flex min-h-[calc(100dvh-56px)] flex-col px-5 pb-5'>
       <section className='pt-2'>
         <p className='font-serif text-[28px] italic tracking-widest'>{concert.title} <span className='text-[#ffdd9f]'>✦</span></p>
         <p className='mt-1 text-[13px] tracking-[.4em]'>2026 · {concert.city}站</p>
@@ -63,7 +63,7 @@ export function HomePage() {
           <div className='flex -space-x-3'>{avatars.map((index) => <img key={index} src={`${import.meta.env.BASE_URL}portraits/demo-orange.webp`} alt={`Demo 听众 ${index+1}`} className='h-8 w-8 rounded-full border-2 border-[#dce3f4] object-cover' style={{filter: index % 2 ? 'hue-rotate(18deg)' : undefined, objectPosition: `${40+index*5}% center`}} />)}</div>
           <p className='whitespace-nowrap text-[12px]'><b className='mr-1 text-[24px] text-[#57ffc0]'>{HOME_LISTENERS}</b>位同场听众正在靠近</p>
         </div>
-        <button type='button' onClick={enter} className='mt-4 flex min-h-[56px] w-full items-center justify-center gap-3 rounded-full border border-[#b6ffdd]/70 bg-[#33f8ac] text-[19px] font-black text-[#062a26] shadow-[0_0_28px_rgba(33,255,170,.35)]'>✧ 进入夜航现场 <span className='text-2xl'>›</span></button>
+        <button type='button' onClick={enter} className='mt-4 flex min-h-[56px] w-full items-center justify-center gap-3 rounded-full border border-[#b6ffdd]/70 bg-[#33f8ac] text-[19px] font-black text-[#062a26] shadow-[0_0_28px_rgba(33,255,170,.35)]'>✧ 今晚同频 <span className='text-2xl'>›</span></button>
         <p className='my-3 text-center text-[11px] tracking-[.13em] text-white/85'>音乐让陌生的我们，在此刻相遇</p>
         <div data-home-music-bar className='flex min-h-[68px] items-center gap-3 rounded-[22px] border border-white/45 bg-[#4b527e]/50 p-2.5 backdrop-blur-lg transition-shadow duration-300' style={{ boxShadow: `0 0 ${10 + reactive.normalizedBass * 24}px rgba(255,155,85,${0.12 + reactive.normalizedBass * 0.24})` }}>
           <img src={`${import.meta.env.BASE_URL}visuals/summer-concert-home.webp`} alt='Demo 音乐视觉封面' className='h-12 w-12 rounded-xl object-cover' />

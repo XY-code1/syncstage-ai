@@ -1,57 +1,6 @@
 import { useLayoutEffect, type ReactNode } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { cn } from '../lib/cn'
-import { ChatIcon, HomeIcon, PersonIcon, UsersIcon } from './icons'
-import { useSocial } from '../store/social'
-
-const TABS = [
-  { to: '/home', label: '首页', Icon: HomeIcon },
-  { to: '/sync', label: '同频', Icon: UsersIcon },
-  { to: '/messages', label: '消息', Icon: ChatIcon },
-  { to: '/profile', label: '我的', Icon: PersonIcon },
-]
-
-/** 一级导航：固定为 首页 / 同频 / 消息 / 我的 */
-export function TabBar() {
-  const { unreadCount } = useSocial()
-
-  return (
-    <nav
-      aria-label='主导航'
-      className='safe-bottom fixed bottom-0 left-1/2 z-30 w-full max-w-[390px] -translate-x-1/2 border-t border-white/20 bg-[#233454]/75 backdrop-blur-xl'
-    >
-      <div className='flex items-stretch'>
-        {TABS.map((tab) => (
-          <NavLink
-            key={tab.to}
-            to={tab.to}
-            end={tab.to === '/'}
-            className={({ isActive }) =>
-              cn(
-                'flex min-h-[64px] flex-1 flex-col items-center gap-1 pb-1 pt-2.5 transition',
-                isActive ? 'text-brand-300' : 'text-white/40 hover:text-white/70',
-              )
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <span className='relative'>
-                  <tab.Icon className='h-[21px] w-[21px]' />
-                  {tab.to === '/messages' && unreadCount > 0 ? (
-                    <span className='absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-500 px-1 text-[9px] font-semibold text-stage-950'>
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                  ) : null}
-                </span>
-                <span className={cn('text-[10px]', isActive ? 'font-medium' : '')}>{tab.label}</span>
-              </>
-            )}
-          </NavLink>
-        ))}
-      </div>
-    </nav>
-  )
-}
 
 /** 一级页面外壳：内容区 + 固定底部导航 */
 const pageScroll = new Map<string, number>()
@@ -64,11 +13,10 @@ export function MainAppLayout() {
     return () => window.removeEventListener('scroll', save)
   }, [location.pathname])
   return (
-    <div data-layout='main-app' className='flex min-h-[100dvh] flex-col pb-[calc(64px+env(safe-area-inset-bottom))]'>
+    <div data-layout='main-app' className='flex min-h-[100dvh] flex-col'>
       <main className='flex-1'>
         <Outlet />
       </main>
-      <TabBar />
     </div>
   )
 }
