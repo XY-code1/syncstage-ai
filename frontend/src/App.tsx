@@ -18,7 +18,6 @@ import { HandshakePage } from './pages/HandshakePage'
 import { HomePage } from './pages/HomePage'
 import { IntentPage } from './pages/IntentPage'
 import { MatchRevealPage } from './pages/MatchRevealPage'
-import { MatchResultsPage } from './pages/MatchResultsPage'
 import { MessagesPage } from './pages/MessagesPage'
 import { MusicAuthPage } from './pages/MusicAuthPage'
 import { ProfilePage } from './pages/ProfilePage'
@@ -93,7 +92,8 @@ export default function App() {
               <Route path='/concert/:concertId/reveal' element={<MatchRevealPage />} />
               <Route path='/concert/:concertId/trace' element={<AgentTracePage />} />
               <Route path='/concert/:concertId/agent' element={<Navigate to='running' replace />} />
-              <Route path='/concert/:concertId/matches' element={<MatchResultsPage />} />
+              {/* 旧版黑色匹配结果页已废弃，保留旧链接但统一回到演出活动页。 */}
+              <Route path='/concert/:concertId/matches' element={<Navigate to='/concert/night-voyage' replace />} />
               <Route path='/concert/:concertId/candidates' element={<AllCandidatesPage />} />
               <Route path='/concert/:concertId/matches/:candidateId' element={<CandidateDetailPage />} />
               <Route path='/concert/:concertId/handshake/:candidateId' element={<HandshakePage />} />

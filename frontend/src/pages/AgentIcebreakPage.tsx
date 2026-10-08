@@ -25,11 +25,17 @@ export function AgentIcebreakPage() {
   const song = reveal?.sharedSong ?? candidate?.sharedSongs?.[0] ?? '暂无足够音乐依据'
   const score = reveal?.matchScore ?? candidate?.score ?? 80
   const reason = reveal?.reason ?? '你们都想在副歌一起唱'
-  const steps = useMemo(() => ['共同演出', '共同歌曲', '到场时间', '公开集合点'], [])
+  const steps = useMemo(() => [
+    ['Agent', '检测到你们都将参加「夜航计划」，并且最近都在循环《烟花》。'],
+    ['Demo 访客（Agent 代发）', '我计划 18:50 到场，想在开场前先熟悉一下同行的人。'],
+    [peerName + '（Agent 代发）', '我也是提前约 40 分钟到，听歌时更偏向安静一点。'],
+    ['Agent', '已对齐共同歌曲、到场时间与同行偏好。建议在公开集合点会合。'],
+    ['Agent', '集合点建议：声浪 Livehouse 静安店 · 1F 检票口右侧周边售卖台。'],
+  ] as const, [peerName])
 
   useEffect(() => {
     if (!started || paused || step >= steps.length) return undefined
-    const timer = window.setTimeout(() => setStep((value) => value + 1), 650)
+    const timer = window.setTimeout(() => setStep((value) => value + 1), 780)
     return () => window.clearTimeout(timer)
   }, [paused, started, step, steps.length])
 
@@ -49,7 +55,7 @@ export function AgentIcebreakPage() {
       <div className='pointer-events-none absolute inset-0 bg-gradient-to-b from-[#18245a]/40 via-[#1f214d]/55 to-[#10162d]/90' />
       <div className='relative z-10 flex min-h-[100dvh] flex-col px-4 safe-top'>
         <header className='flex items-center gap-3 py-3'>
-          <button type='button' onClick={() => navigate(`/concert/${concertId}/matches`)} aria-label='返回候选人' className='flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-white/10 text-xl backdrop-blur-md'>‹</button>
+          <button type='button' onClick={() => navigate('/concert/night-voyage')} aria-label='返回演出页' className='flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-white/10 text-xl backdrop-blur-md'>‹</button>
           <div className='min-w-0 flex-1'><p className='text-[11px] uppercase tracking-[.24em] text-white/65'>QQ音乐 · 一起去现场</p><h1 className='truncate text-[21px] font-semibold'>同频邀请卡</h1></div>
           <span className='text-[12px] text-white/65'>{started ? '2 / 2' : '1 / 2'}</span>
         </header>
@@ -65,8 +71,7 @@ export function AgentIcebreakPage() {
           ) : (
             <section className='rounded-[28px] border border-white/25 bg-[#18214f]/75 p-5 shadow-[0_20px_60px_rgba(0,0,0,.28)] backdrop-blur-xl'>
               <div className='flex items-center gap-3'>{reveal ? <img src={`${import.meta.env.BASE_URL}${reveal.avatar}`} alt={`${peerName}的头像`} className='h-14 w-14 rounded-full border-2 border-[#c994ff] object-cover' /> : null}<div><p className='text-[12px] text-brand-200'>{inviteState === 'waiting' ? '邀请已送达，等她回应' : inviteState === 'accepted' ? '你们的同频计划成立了' : 'AI 正在对齐你们的音乐信号'}</p><h2 className='text-[22px] font-semibold'>{name} × {peerName}</h2></div></div>
-              <div className='my-6 flex items-center justify-center gap-1'>{steps.map((label, index) => <div key={label} className='flex flex-1 flex-col items-center gap-2'><span className={`flex h-9 w-9 items-center justify-center rounded-full border text-sm ${index < step ? 'border-brand-300 bg-brand-300 text-stage-950' : 'border-white/30 text-white/45'}`}>{index < step ? '✓' : index + 1}</span><span className='text-center text-[10px] text-white/65'>{label}</span></div>)}</div>
-              <div className='rounded-2xl border border-white/15 bg-white/10 p-4'><p className='text-[11px] tracking-[.15em] text-brand-200'>同频方案卡</p><p className='mt-2 text-[18px] font-semibold'>一起听《{song}》</p><p className='mt-1 text-[13px] text-white/65'>{concert?.meetingPoint.time ?? '18:50'} · {concert?.meetingPoint.name ?? '公开集合点'}</p></div>
+              <div className='my-5 space-y-3'>{steps.slice(0, step).map(([speaker, text], index) => <div key={`${speaker}-${index}`} className={`rounded-2xl border p-3 ${speaker === 'Agent' ? 'border-[#ffd76a]/35 bg-[#fff0c733]' : 'border-white/20 bg-white/10'}`}><p className='text-[11px] font-semibold text-brand-200'>{speaker}</p><p className='mt-1 text-[14px] leading-6 text-white/90'>{text}</p></div>)}{step < steps.length ? <p className='flex items-center gap-2 text-[12px] text-white/65'><span className='h-2 w-2 animate-pulse rounded-full bg-[#ffd76a]' />正在对齐音乐信号…</p> : <div className='rounded-2xl border border-white/20 bg-white/10 p-4'><p className='text-[11px] tracking-[.15em] text-brand-200'>同频方案卡</p><p className='mt-2 text-[18px] font-semibold'>一起听《{song}》</p><p className='mt-1 text-[13px] text-white/65'>{concert?.meetingPoint.time ?? '18:50'} · {concert?.meetingPoint.name ?? '公开集合点'}</p></div>}</div>
             </section>
           )}
         </main>
