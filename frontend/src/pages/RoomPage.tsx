@@ -23,7 +23,6 @@ import {
 import { cn } from '../lib/cn'
 import {
   DEMO_ROLES,
-  DEMO_ROLE_KEY,
   demoAvatarOf,
   demoModeEnabled,
   readDemoRole,
@@ -165,16 +164,6 @@ export function RoomPage() {
     setDemoRole(readDemoRole(location.search))
   }, [demoMode, location.search])
 
-  // 手动切换 Demo 身份：只写本 tab 的 sessionStorage，两个浏览器互不覆盖。
-  const switchDemoRole = (role: DemoRole) => {
-    try {
-      window.sessionStorage.setItem(DEMO_ROLE_KEY, role)
-    } catch {
-      // 隐私模式下写入失败也不影响当前会话
-    }
-    setDemoRole(role)
-  }
-
   const [remoteRoom, setRemoteRoom] = useState<RoomState | null>(null)
   const [remoteError, setRemoteError] = useState('')
 
@@ -240,7 +229,10 @@ export function RoomPage() {
   const metaKey = `sfl.room.meta.${roomId || concertId}`
   const scrollKey = `sfl.room.scroll.${roomId || concertId}`
 
-  const [sheet, setSheet] = useState<SheetKind>('none')
+  const [sheet, setSheet] = useState<SheetKind>(() => new URLSearchParams(location.search).get('meeting') === '1' ? 'meeting' : 'none')
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get('meeting') === '1' && roomId) setSheet('meeting')
+  }, [location.search, roomId])
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [meta, setMeta] = useState<RoomMeta>(EMPTY_META)
   const [input, setInput] = useState('')
@@ -504,35 +496,6 @@ export function RoomPage() {
           </button>
         </div>
       </header>
-
-      {/* Demo 双身份横幅：只在开发 / 演示模式出现，用于两个浏览器同房间互发真人消息 */}
-      {demoMode && (
-        <div className='room-demo mx-3 mt-2 shrink-0 rounded-xl border border-amber-300/25 bg-amber-300/[.06] px-2.5 py-1.5'>
-          <div className='flex items-center gap-2'>
-            <span className='h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300' />
-            <span className='min-w-0 flex-1 whitespace-nowrap text-[11px] font-medium text-amber-100'>
-              {`当前身份：${demoRole ? DEMO_ROLES[demoRole].name : '未选择'}`}
-            </span>
-          </div>
-          <div className='mt-1.5 flex items-center justify-end gap-1'>
-            {(['visitor', 'jiangli'] as DemoRole[]).map((role) => (
-              <button
-                key={role}
-                type='button'
-                onClick={() => switchDemoRole(role)}
-                className={cn(
-                  'rounded-full border px-2 py-0.5 text-[10.5px] transition',
-                  demoRole === role
-                    ? 'border-amber-300/50 bg-amber-300/15 text-amber-100'
-                    : 'border-white/12 text-white/55 hover:border-white/25 hover:text-white/80',
-                )}
-              >
-                {`切换为 ${DEMO_ROLES[role].name}`}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className='room-stage' aria-hidden='true'>
         <ImmersiveMusicStage artwork={`${import.meta.env.BASE_URL}visuals/summer-concert-home.webp`} title={`共同心动曲 · ${selectedTrack.title}`} compact />

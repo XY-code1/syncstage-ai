@@ -11,7 +11,7 @@ import { useSession } from '../store/session'
 export function AgentIcebreakPage() {
   const { concertId = 'night-flight', candidateId = '' } = useParams()
   const navigate = useNavigate()
-  const { agent, invite } = useSession()
+  const { agent, invite, peerConfirm } = useSession()
   const { profile } = useProfile()
   const [started, setStarted] = useState(false)
   const [paused, setPaused] = useState(false)
@@ -35,9 +35,9 @@ export function AgentIcebreakPage() {
 
   useEffect(() => {
     if (inviteState !== 'waiting') return undefined
-    const timer = window.setTimeout(() => setInviteState('accepted'), 3000)
+    const timer = window.setTimeout(() => { setInviteState('accepted'); void peerConfirm(true) }, 3000)
     return () => window.clearTimeout(timer)
-  }, [inviteState])
+  }, [inviteState, peerConfirm])
 
   if (!candidate) {
     return <div className='flex min-h-[100dvh] items-center justify-center bg-[#10162d] p-6 text-center text-white'>暂无可用匹配，请先完成同频寻找。</div>
@@ -70,7 +70,7 @@ export function AgentIcebreakPage() {
             </section>
           )}
         </main>
-        <footer className='safe-bottom pb-3'>{!started ? <button type='button' onClick={() => { setStarted(true); setStep(1) }} className='flex min-h-[56px] w-full items-center justify-center rounded-full bg-[#31f28b] text-[18px] font-bold text-[#062a26] shadow-[0_0_28px_rgba(49,242,139,.35)]'>让 AI 先替我们破冰 <span className='ml-2'>→</span></button> : step < steps.length ? <button type='button' onClick={() => setPaused((value) => !value)} className='min-h-12 w-full rounded-full border border-white/35 bg-white/10 text-[15px]'>{paused ? '继续 AI' : '暂停 AI'}</button> : inviteState === 'idle' ? <button type='button' onClick={() => { setInviteState('waiting'); void invite(candidate.userId) }} className='flex min-h-[56px] w-full items-center justify-center rounded-full bg-[#31f28b] text-[18px] font-bold text-[#062a26]'>发起同频邀请 <span className='ml-2'>→</span></button> : inviteState === 'waiting' ? <div className='space-y-2'><div className='flex items-center justify-center gap-3 text-[14px] text-white/80'><span className='h-2.5 w-2.5 animate-pulse rounded-full bg-brand-300' />邀请已送达，等她回应</div><div className='grid grid-cols-2 gap-2'><button type='button' onClick={() => setInviteState('idle')} className='min-h-12 rounded-full border border-white/35 bg-white/10 px-2 text-[13px]'>撤回邀请</button><button type='button' onClick={() => navigate('/home')} className='min-h-12 rounded-full border border-white/35 bg-white/10 px-2 text-[13px]'>返回演出页</button></div></div> : <div className='space-y-2'><p className='text-center text-[14px] text-brand-200'>写歌的江离已接受邀请</p><div className='grid grid-cols-2 gap-2'><button type='button' onClick={() => navigate(`/concert/${concertId}/room`)} className='min-h-12 rounded-full bg-[#31f28b] px-2 text-[13px] font-bold text-[#062a26]'>一起听这首歌</button><button type='button' onClick={() => navigate('/home')} className='min-h-12 rounded-full border border-white/35 bg-white/10 px-2 text-[13px]'>查看集合点</button></div></div>} <p className='mt-2 text-center text-[11px] text-white/60'>Agent 只对齐授权的结构化信息，是否同行由你确认</p></footer>
+        <footer className='safe-bottom pb-3'>{!started ? <button type='button' onClick={() => { setStarted(true); setStep(1) }} className='flex min-h-[56px] w-full items-center justify-center rounded-full bg-[#31f28b] text-[18px] font-bold text-[#062a26] shadow-[0_0_28px_rgba(49,242,139,.35)]'>让 AI 先替我们破冰 <span className='ml-2'>→</span></button> : step < steps.length ? <button type='button' onClick={() => setPaused((value) => !value)} className='min-h-12 w-full rounded-full border border-white/35 bg-white/10 text-[15px]'>{paused ? '继续 AI' : '暂停 AI'}</button> : inviteState === 'idle' ? <button type='button' onClick={() => { setInviteState('waiting'); void invite(candidate.userId) }} className='flex min-h-[56px] w-full items-center justify-center rounded-full bg-[#31f28b] text-[18px] font-bold text-[#062a26]'>发起同频邀请 <span className='ml-2'>→</span></button> : inviteState === 'waiting' ? <div className='space-y-2'><div className='flex items-center justify-center gap-3 text-[14px] text-white/80'><span className='h-2.5 w-2.5 animate-pulse rounded-full bg-brand-300' />邀请已送达，等她回应</div><div className='grid grid-cols-2 gap-2'><button type='button' onClick={() => setInviteState('idle')} className='min-h-12 rounded-full border border-white/35 bg-white/10 px-2 text-[13px]'>撤回邀请</button><button type='button' onClick={() => navigate('/home')} className='min-h-12 rounded-full border border-white/35 bg-white/10 px-2 text-[13px]'>返回演出页</button></div></div> : <div className='space-y-2'><p className='text-center text-[14px] text-brand-200'>写歌的江离已接受邀请</p><div className='grid grid-cols-2 gap-2'><button type='button' onClick={() => navigate(`/concert/${concertId}/room`)} className='min-h-12 rounded-full bg-[#31f28b] px-2 text-[13px] font-bold text-[#062a26]'>一起听这首歌</button><button type='button' onClick={() => navigate(`/concert/${concertId}/room?meeting=1`)} className='min-h-12 rounded-full border border-white/35 bg-white/10 px-2 text-[13px]'>查看集合点</button></div></div>} <p className='mt-2 text-center text-[11px] text-white/60'>Agent 只对齐授权的结构化信息，是否同行由你确认</p></footer>
       </div>
     </div>
   )
