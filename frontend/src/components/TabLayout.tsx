@@ -50,7 +50,6 @@ export function TabHeader({
         <span className='rounded-pill border border-brand-500/30 bg-brand-500/10 px-2 py-[2px] text-[10px] text-brand-200'>
           一起去现场
         </span>
-        <span className='ml-auto text-[10px] text-white/30'>概念 Demo · 非官方</span>
       </div>
       <div className='mt-1.5 flex items-end gap-3 px-4 pb-2.5'>
         <div className='min-w-0 flex-1'>

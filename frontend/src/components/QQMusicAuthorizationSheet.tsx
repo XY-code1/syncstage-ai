@@ -24,13 +24,13 @@ export function QQMusicAuthorizationSheet({ open, onClose, onAuthorized }: { ope
         <ShieldIcon className='mt-0.5 h-4 w-4 shrink-0 text-brand-300' />
         <p>仅用于本次同场匹配，不公开完整听歌记录，可随时撤回。</p>
       </div>
-      <p className='rounded-xl border border-warm-400/25 bg-warm-400/[0.06] px-3 py-2 text-[12px] leading-relaxed text-warm-200'>比赛Demo使用模拟授权数据，入围后接入TME官方测试接口。</p>
+      <p className='rounded-xl border border-warm-400/25 bg-warm-400/[0.06] px-3 py-2 text-[12px] leading-relaxed text-warm-200'>当前使用本地模拟授权数据，正式接入将采用 TME 官方测试接口。</p>
       {error ? <p role='alert' className='text-[13px] text-rose-300'>{error}</p> : null}
       <Button full size='lg' disabled={authorizing} icon={<SparkleIcon className='h-4 w-4' />} onClick={async () => { if (await authorize()) onAuthorized() }}>
-        {authorizing ? '正在载入Demo画像…' : '同意并开启同频'}
+        {authorizing ? '正在载入音乐画像…' : '同意并开启同频'}
       </Button>
       <Button full variant='ghost' onClick={onClose}>暂不授权</Button>
-      <p className='text-center text-[11px] text-white/40'>概念功能Demo·非官方</p>
+      <p className='text-center text-[11px] text-white/40'>音乐画像授权 · 非官方接口</p>
     </div>
   </Sheet>
 }

@@ -61,7 +61,7 @@ export function MockNotice({ className, compact }: { className?: string; compact
       )}
     >
       <p className={cn('text-warm-400', compact ? 'text-[11px] leading-snug' : 'text-[12px] leading-relaxed')}>
-        本作品为参赛概念Demo，当前使用模拟数据，未调用QQ音乐官方内部API。
+        当前使用模拟数据，未调用QQ音乐官方内部API。
       </p>
       {compact ? null : (
         <p className='mt-1 text-[11px] leading-relaxed text-white/45'>

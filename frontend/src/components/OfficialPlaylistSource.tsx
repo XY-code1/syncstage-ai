@@ -55,7 +55,7 @@ export function OfficialPlaylistSource({ className, compact = false }: { classNa
     >
       <div className='flex flex-wrap items-center gap-2'>
         <OfficialPlaylistBadge />
-        <span className='text-[12px] text-white/45'>来源：{OFFICIAL_PLAYLIST.provider} · 赛事Demo模拟数据</span>
+        <span className='text-[12px] text-white/45'>来源：{OFFICIAL_PLAYLIST.provider} · 本地模拟数据</span>
       </div>
       {compact ? null : (
         <p className='mt-2 text-[13px] leading-relaxed text-white/60'>{OFFICIAL_PLAYLIST_USE_NOTE}</p>

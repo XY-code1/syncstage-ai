@@ -504,7 +504,7 @@ export function DemoMusicPlayer({ tracks, reason, compact = false, className }: 
       ) : (
         <div className='mt-2'>
           <a data-official-audio-fallback href={track.qqMusicUrl} target='_blank' rel='noopener noreferrer' className='flex min-h-11 w-full items-center justify-center rounded-xl border border-brand-400/35 px-3 text-[14px] font-semibold text-brand-300'>在QQ音乐试听</a>
-          <p className='mt-1.5 text-[11px] leading-relaxed text-white/40'>当前为赛事Demo，未接入官方播放API · 每次最多试听 30 秒</p>
+          <p className='mt-1.5 text-[11px] leading-relaxed text-white/40'>未接入官方播放 API · 每次最多试听 30 秒</p>
         </div>
       )}
     </section>

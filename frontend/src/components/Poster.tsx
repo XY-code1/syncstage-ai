@@ -34,7 +34,7 @@ export function Poster({
 
       <div className='absolute left-0 top-0 flex w-full items-start justify-between p-4'>
         <span className='rounded-pill border border-white/18 bg-white/10 px-2.5 py-1 text-[10px] tracking-[0.18em] text-white/85'>
-          虚构演出 · DEMO
+          现场预告
         </span>
         <DemoBadge label={concert.ticketStatus} />
       </div>
