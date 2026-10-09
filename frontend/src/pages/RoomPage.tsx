@@ -500,7 +500,7 @@ export function RoomPage() {
       <div className='room-stage' aria-hidden='true'>
         <ImmersiveMusicStage artwork={`${import.meta.env.BASE_URL}visuals/summer-concert-home.webp`} title={`共同心动曲 · ${selectedTrack.title}`} compact />
         <span className='room-stage-person room-stage-person-a'><img src={`${import.meta.env.BASE_URL}avatars/candidate-orange.webp`} alt='' />木那啦啦</span>
-        <span className='room-stage-person room-stage-person-b'><img src={`${import.meta.env.BASE_URL}portraits/demo-orange.webp`} alt='' />Demo 访客</span>
+        <span className='room-stage-person room-stage-person-b'><img src={`${import.meta.env.BASE_URL}assets/demo-user-avatar.webp`} alt='同场听众' />你</span>
         <span className='room-stage-person room-stage-person-c'><img src={`${import.meta.env.BASE_URL}avatars/candidate-jiangli.webp`} alt='' />写歌的江离</span>
       </div>
 
@@ -833,7 +833,7 @@ export function RoomPage() {
           </button>
 
           <p className='px-1 pt-1 text-[11px] leading-relaxed text-white/35'>
-            长按任意一条真人消息可举报或屏蔽成员。本 Demo 的房间与成员均为虚构数据。
+            长按任意一条真人消息可举报或屏蔽成员。当前房间与成员为演示数据。
           </p>
         </div>
       </Sheet>

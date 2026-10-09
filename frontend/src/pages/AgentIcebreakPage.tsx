@@ -20,15 +20,21 @@ export function AgentIcebreakPage() {
   const concert = demoConcerts.find((item) => item.id === concertId)
   const reveal = revealCandidateById(candidateId)
   // candidateId 是流程的一等状态：缺失时不静默替换为第一位候选人，避免头像/理由错配。
-  const candidate = agent?.rankedCandidates.find((item) => item.userId === sourceCandidateId(candidateId))
-  const name = profile.nickname || 'Demo访客'
+  const rankedCandidate = agent?.rankedCandidates.find((item) => item.userId === sourceCandidateId(candidateId))
+  const candidate: any = rankedCandidate ?? (reveal ? {
+    userId: reveal.sourceUserId,
+    candidate: { nickname: reveal.displayName },
+    score: reveal.matchScore,
+    sharedSongs: [reveal.sharedSong],
+  } : null)
+  const name = profile.nickname || '你'
   const peerName = reveal?.displayName ?? candidate?.candidate.nickname ?? '同频搭子'
   const song = reveal?.sharedSong ?? candidate?.sharedSongs?.[0] ?? '暂无足够音乐依据'
   const score = reveal?.matchScore ?? candidate?.score ?? 80
   const reason = reveal?.reason ?? '你们都想在副歌一起唱'
   const steps = useMemo(() => [
     ['Agent', '检测到你们都将参加「夜航计划」，并且最近都在循环《烟花》。'],
-    ['Demo 访客（Agent 代发）', '我计划 18:50 到场，想在开场前先熟悉一下同行的人。'],
+    ['你（Agent 代发）', '我计划 18:50 到场，想在开场前先熟悉一下同行的人。'],
     [peerName + '（Agent 代发）', '我也是提前约 40 分钟到，听歌时更偏向安静一点。'],
     ['Agent', '已对齐共同歌曲、到场时间与同行偏好。建议在公开集合点会合。'],
     ['Agent', '集合点建议：声浪 Livehouse 静安店 · 1F 检票口右侧周边售卖台。'],
@@ -76,7 +82,7 @@ export function AgentIcebreakPage() {
             </section>
           )}
         </main>
-        <footer className='safe-bottom pb-3'>{!started ? <button type='button' onClick={() => { setStarted(true); setStep(1) }} className='flex min-h-[56px] w-full items-center justify-center rounded-full bg-[#31f28b] text-[18px] font-bold text-[#062a26] shadow-[0_0_28px_rgba(49,242,139,.35)]'>让 AI 先替我们破冰 <span className='ml-2'>→</span></button> : step < steps.length ? <button type='button' onClick={() => setPaused((value) => !value)} className='min-h-12 w-full rounded-full border border-white/35 bg-white/10 text-[15px]'>{paused ? '继续 AI' : '暂停 AI'}</button> : inviteState === 'idle' ? <button type='button' onClick={() => { setInviteState('waiting'); void invite(candidate.userId) }} className='flex min-h-[56px] w-full items-center justify-center rounded-full bg-[#31f28b] text-[18px] font-bold text-[#062a26]'>发起同频邀请 <span className='ml-2'>→</span></button> : inviteState === 'waiting' ? <div className='space-y-2'><div className='flex items-center justify-center gap-3 text-[14px] text-white/80'><span className='h-2.5 w-2.5 animate-pulse rounded-full bg-brand-300' />邀请已送达，等她回应</div><div className='grid grid-cols-2 gap-2'><button type='button' onClick={() => setInviteState('idle')} className='min-h-12 rounded-full border border-white/35 bg-white/10 px-2 text-[13px]'>撤回邀请</button><button type='button' onClick={() => navigate('/home')} className='min-h-12 rounded-full border border-white/35 bg-white/10 px-2 text-[13px]'>返回演出页</button></div></div> : <div className='space-y-2'><p className='text-center text-[14px] text-brand-200'>写歌的江离已接受邀请</p><div className='grid grid-cols-2 gap-2'><button type='button' onClick={() => navigate(`/concert/${concertId}/room`)} className='min-h-12 rounded-full bg-[#31f28b] px-2 text-[13px] font-bold text-[#062a26]'>一起听这首歌</button><button type='button' onClick={() => navigate(`/concert/${concertId}/room?meeting=1`)} className='min-h-12 rounded-full border border-white/35 bg-white/10 px-2 text-[13px]'>查看集合点</button></div></div>} <p className='mt-2 text-center text-[11px] text-white/60'>Agent 只对齐授权的结构化信息，是否同行由你确认</p></footer>
+        <footer className='safe-bottom pb-3'>{!started ? <button type='button' onClick={() => { setStarted(true); setStep(1) }} className='flex min-h-[56px] w-full items-center justify-center rounded-full bg-[#31f28b] text-[18px] font-bold text-[#062a26] shadow-[0_0_28px_rgba(49,242,139,.35)]'>让 AI 先替我们破冰 <span className='ml-2'>→</span></button> : step < steps.length ? <button type='button' onClick={() => setPaused((value) => !value)} className='min-h-12 w-full rounded-full border border-white/35 bg-white/10 text-[15px]'>{paused ? '继续 AI' : '暂停 AI'}</button> : inviteState === 'idle' ? <button type='button' onClick={() => { setInviteState('waiting'); void invite(candidate.userId) }} className='flex min-h-[56px] w-full items-center justify-center rounded-full bg-[#31f28b] text-[18px] font-bold text-[#062a26]'>发起同频邀请 <span className='ml-2'>→</span></button> : inviteState === 'waiting' ? <div className='space-y-2'><div className='flex items-center justify-center gap-3 text-[14px] text-white/80'><span className='h-2.5 w-2.5 animate-pulse rounded-full bg-brand-300' />邀请已送达，等她回应</div><div className='grid grid-cols-2 gap-2'><button type='button' onClick={() => setInviteState('idle')} className='min-h-12 rounded-full border border-white/35 bg-white/10 px-2 text-[13px]'>撤回邀请</button><button type='button' onClick={() => navigate('/home')} className='min-h-12 rounded-full border border-white/35 bg-white/10 px-2 text-[13px]'>返回演出页</button></div></div> : <div className='space-y-2'><p className='text-center text-[14px] text-brand-200'>写歌的江离已接受邀请</p><div className='grid grid-cols-2 gap-2'><button type='button' onClick={() => navigate('/concert/night-voyage/room')} className='min-h-12 rounded-full bg-[#31f28b] px-2 text-[13px] font-bold text-[#062a26]'>一起听这首歌</button><button type='button' onClick={() => navigate('/concert/night-voyage/room?meeting=1')} className='min-h-12 rounded-full border border-white/35 bg-white/10 px-2 text-[13px]'>查看集合点</button></div></div>} <p className='mt-2 text-center text-[11px] text-white/60'>Agent 只对齐授权的结构化信息，是否同行由你确认</p></footer>
       </div>
     </div>
   )

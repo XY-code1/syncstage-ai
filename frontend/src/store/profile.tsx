@@ -51,7 +51,7 @@ export interface UserProfile {
 export const CONTACT_TYPES = ['微信', 'QQ', '手机号', '邮箱', '其它'] as const
 
 export const DEFAULT_PROFILE: UserProfile = {
-  nickname: 'Demo 访客',
+  nickname: '你',
   syncStageId: 'SFL-2308-4471',
   birthday: '2003-06-14',
   gender: 'female',

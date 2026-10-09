@@ -23,7 +23,7 @@ export interface QQMusicAuthProvider {
 export const DEFAULT_QQ_MUSIC_USER: QQMusicUser = {
   loginMode: 'demo',
   authorized: false,
-  nickname: 'Demo访客',
+  nickname: '你',
   avatar: `${import.meta.env.BASE_URL}assets/demo-user-avatar.webp`,
   qqOpenId: null,
   dataSource: 'mock',
@@ -35,7 +35,7 @@ export class MockQQMusicAuthProvider implements QQMusicAuthProvider {
   }
 
   async getProfile(): Promise<UserProfile> {
-    return { nickname: 'Demo访客', avatar: DEFAULT_QQ_MUSIC_USER.avatar, qqOpenId: null, dataSource: 'mock' }
+    return { nickname: '你', avatar: DEFAULT_QQ_MUSIC_USER.avatar, qqOpenId: null, dataSource: 'mock' }
   }
 
   async getMusicProfile(): Promise<MusicProfile> {

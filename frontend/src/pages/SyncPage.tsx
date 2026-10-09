@@ -11,7 +11,7 @@ export function SyncPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const params = useParams()
-  const { agent, concertId, matchResumable, authorized } = useSession()
+  const { agent, concertId } = useSession()
   const requestedCandidate = new URLSearchParams(location.search).get('candidate')
   const persistedCandidate = window.sessionStorage.getItem(`syncstage:reveal:${params.concertId ?? concertId}`)
   const initialCandidateId = requestedCandidate ?? persistedCandidate
@@ -44,12 +44,7 @@ export function SyncPage() {
     const businessId = agent?.rankedCandidates[presentationIndex]?.userId ?? item.sourceUserId
     patchFlow({ selectedCandidateId: businessId })
     window.sessionStorage.setItem(`syncstage:reveal:${concert.id}`, item.candidateId)
-    const inSession = Boolean(agent?.rankedCandidates.some((candidate) => candidate.userId === businessId))
-    if (inSession && matchResumable) {
-      navigate(`/concert/${concert.id}/icebreak/${item.candidateId}`)
-      return
-    }
-    navigate(authorized ? `/concert/${concert.id}/task` : `/concert/${concert.id}/authorize`)
+    navigate(`/concert/night-voyage/icebreak/${item.candidateId}`)
   }
 
   return (

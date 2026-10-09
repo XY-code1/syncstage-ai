@@ -102,7 +102,7 @@ export const DEMO_VIEWER = {
   userId: 'u-viewer',
   nickname: '你',
   gender: 'female' as Gender,
-  profileLabel: '23 岁 · Demo 访客',
+  profileLabel: '23 岁 · 上海',
   age: 23,
   city: '上海',
   headline: '第一次用一起去现场，想找个人一起把副歌唱完',

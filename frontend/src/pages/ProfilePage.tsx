@@ -24,8 +24,8 @@ export function ProfilePage() {
     </header>
     <section className='summer-glass music-identity'>
       <div className='identity-top'>
-        <img className='identity-portrait' src={profile.avatar || import.meta.env.BASE_URL + 'portraits/demo-orange.webp'} alt='Demo访客头像' />
-        <div><h2>{profile.nickname === DEFAULT_PROFILE.nickname ? 'Demo访客' : profile.nickname}</h2><p>{[age !== null ? age + '岁' : null, genderLabel, profile.city].filter(Boolean).join(' · ')}</p></div>
+        <img className='identity-portrait' src={profile.avatar || import.meta.env.BASE_URL + 'portraits/demo-orange.webp'} alt='你头像' />
+        <div><h2>{profile.nickname === DEFAULT_PROFILE.nickname ? '你' : profile.nickname}</h2><p>{[age !== null ? age + '岁' : null, genderLabel, profile.city].filter(Boolean).join(' · ')}</p></div>
         <button onClick={() => navigate('/me/edit')} className='identity-edit'>编辑资料</button>
       </div>
       <p className='identity-signature'>{profile.signature === DEFAULT_PROFILE.signature ? '晚风、海边和可以一起唱歌的人' : profile.signature || '晚风、海边和可以一起唱歌的人'}</p>
