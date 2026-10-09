@@ -70,7 +70,7 @@ export function MusicAuthPage() {
         <p className='mt-1.5 text-[11.5px] leading-relaxed text-white/50'>
           只用于计算同场观众的音乐重合度，不会公开展示。可以只授权其中几项，Agent 会在可用范围内工作。
         </p>
-        <p className='mt-1 text-[10.5px] text-white/40'>概念功能Demo·非官方</p>
+        <p className='mt-1 text-[10.5px] text-white/40'>音乐画像授权 · 非官方接口</p>
 
         {declined ? (
           <div className='mt-3 rounded-2xl border border-warm-400/30 bg-warm-400/[0.07] px-3.5 py-3'>

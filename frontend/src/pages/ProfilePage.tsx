@@ -42,6 +42,6 @@ export function ProfilePage() {
     <div className='identity-stats summer-glass'>{[{ value: 14, label: '场演出' }, { value: 6, label: '次匹配' }, { value: 6, label: '位同频好友' }].map(s => <div key={s.label}><strong>{s.value}</strong><span>{s.label}</span></div>)}</div>
     <section className='summer-glass identity-menu'>{entries.map(e => <button key={e.to} onClick={() => navigate(e.to)}><e.Icon /><span>{e.label}</span><ChevronRightIcon /></button>)}</section>
     <details className='summer-glass identity-settings'><summary>更多设置 <span>＋</span></summary><div>{[{ to: '/me/privacy', label: '隐私与安全' }, { to: '/me/music', label: '音乐授权' }, { to: '/me/settings', label: '数据源和设置' }].map(e => <button key={e.label} onClick={() => navigate(e.to)}>{e.label}<ChevronRightIcon /></button>)}</div></details>
-    <p className='summer-disclaimer'>概念功能Demo·非官方 · 头像为虚构人物，经历与关系为演示数据</p>
+    <p className='summer-disclaimer'>音乐身份与同频关系 · 头像与经历为演示数据</p>
   </div>
 }
