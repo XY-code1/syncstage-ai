@@ -12,7 +12,12 @@ import { QQMusicAuthorizationSheet } from '../components/QQMusicAuthorizationShe
 import { useQQMusicAuth } from '../store/qqMusicAuth'
 
 const HOME_LISTENERS = 128
-const avatars = ['candidate-orange.webp', 'candidate-jiangli.webp', 'candidate-ache.webp', 'demo-user-avatar.webp']
+const avatars = [
+  ['candidate-orange.webp', '靠近舞台的橘子'],
+  ['candidate-jiangli.webp', '写歌的江离'],
+  ['candidate-ache.webp', '带着相机的阿澈'],
+  ['demo-user-avatar.webp', '同场听众'],
+]
 
 export function HomePage() {
   const navigate = useNavigate()
@@ -63,7 +68,7 @@ export function HomePage() {
       </section>
       <section className='mt-auto pt-5'>
         <div className='flex min-h-[52px] items-center gap-2 rounded-full border border-white/40 bg-[#26365c]/60 px-3 backdrop-blur-md'>
-          <div className='flex -space-x-3'>{avatars.map((avatar, index) => <img key={avatar} src={`${import.meta.env.BASE_URL}${avatar === 'demo-user-avatar.webp' ? 'assets/' : 'avatars/'}${avatar}`} alt={`同场听众 ${index+1}`} className='h-8 w-8 rounded-full border-2 border-[#dce3f4] object-cover' />)}</div>
+          <div className='flex -space-x-3'>{avatars.map(([avatar, alt]) => <img key={avatar} src={`${import.meta.env.BASE_URL}${avatar === 'demo-user-avatar.webp' ? 'assets/' : 'avatars/'}${avatar}`} alt={alt} className='h-8 w-8 rounded-full border-2 border-[#dce3f4] object-cover' />)}</div>
           <p className='whitespace-nowrap text-[12px]'><b className='mr-1 text-[24px] text-[#57ffc0]'>{HOME_LISTENERS}</b>位同场听众正在靠近</p>
         </div>
         <button type='button' onClick={enter} className='mt-4 flex min-h-[56px] w-full items-center justify-center gap-3 rounded-full border border-[#b6ffdd]/70 bg-[#33f8ac] text-[19px] font-black text-[#062a26] shadow-[0_0_28px_rgba(33,255,170,.35)]'>✧ 今晚同频 <span className='text-2xl'>›</span></button>
