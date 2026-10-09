@@ -12,13 +12,6 @@ import { QQMusicAuthorizationSheet } from '../components/QQMusicAuthorizationShe
 import { useQQMusicAuth } from '../store/qqMusicAuth'
 
 const HOME_LISTENERS = 128
-const avatars = [
-  ['candidate-orange.webp', '靠近舞台的橘子'],
-  ['candidate-jiangli.webp', '写歌的江离'],
-  ['candidate-ache.webp', '带着相机的阿澈'],
-  ['demo-user-avatar.webp', '同场听众'],
-]
-
 export function HomePage() {
   const navigate = useNavigate()
   const player = useAudioPlayer()
@@ -68,14 +61,19 @@ export function HomePage() {
       </section>
       <section className='mt-auto pt-5'>
         <div className='flex min-h-[52px] items-center gap-2 rounded-full border border-white/40 bg-[#26365c]/60 px-3 backdrop-blur-md'>
-          <div className='flex -space-x-3'>{avatars.map(([avatar, alt]) => <img key={avatar} src={`${import.meta.env.BASE_URL}${avatar === 'demo-user-avatar.webp' ? 'assets/' : 'avatars/'}${avatar}`} alt={alt} className='h-8 w-8 rounded-full border-2 border-[#dce3f4] object-cover' />)}</div>
+          <div className='flex -space-x-3'>
+            <img src={`${import.meta.env.BASE_URL}avatars/candidate-orange.webp`} alt='靠近舞台的橘子' className='h-8 w-8 rounded-full border-2 border-[#dce3f4] object-cover' />
+            <img src={`${import.meta.env.BASE_URL}avatars/candidate-jiangli.webp`} alt='写歌的江离' className='h-8 w-8 rounded-full border-2 border-[#dce3f4] object-cover' />
+            <img src={`${import.meta.env.BASE_URL}avatars/candidate-ache.webp`} alt='带着相机的阿澈' className='h-8 w-8 rounded-full border-2 border-[#dce3f4] object-cover' />
+            <img src={`${import.meta.env.BASE_URL}assets/demo-user-avatar.webp`} alt='同场听众' className='h-8 w-8 rounded-full border-2 border-[#dce3f4] object-cover' />
+          </div>
           <p className='whitespace-nowrap text-[12px]'><b className='mr-1 text-[24px] text-[#57ffc0]'>{HOME_LISTENERS}</b>位同场听众正在靠近</p>
         </div>
         <button type='button' onClick={enter} className='mt-4 flex min-h-[56px] w-full items-center justify-center gap-3 rounded-full border border-[#b6ffdd]/70 bg-[#33f8ac] text-[19px] font-black text-[#062a26] shadow-[0_0_28px_rgba(33,255,170,.35)]'>✧ 今晚同频 <span className='text-2xl'>›</span></button>
         {playHint && !player.playing ? <p role='status' className='mt-2 text-center text-[12px] text-white/85'>轻触播放，开启今晚的同频</p> : null}
         <p className='my-3 text-center text-[11px] tracking-[.13em] text-white/85'>音乐让陌生的我们，在此刻相遇</p>
         <div data-home-music-bar className='flex min-h-[68px] items-center gap-3 rounded-[22px] border border-white/45 bg-[#4b527e]/50 p-2.5 backdrop-blur-lg transition-shadow duration-300' style={{ boxShadow: `0 0 ${10 + reactive.normalizedBass * 24}px rgba(255,155,85,${0.12 + reactive.normalizedBass * 0.24})` }}>
-          <img src={`${import.meta.env.BASE_URL}visuals/summer-concert-home.webp`} alt='Demo 音乐视觉封面' className='h-12 w-12 rounded-xl object-cover' />
+          <img src={`${import.meta.env.BASE_URL}visuals/summer-concert-home.webp`} alt='音乐视觉封面' className='h-12 w-12 rounded-xl object-cover' />
           <div className='min-w-0 flex-1'><p className='truncate text-[16px] font-bold'>{track.title}</p><p className='mt-1 text-[12px] text-white/75'>{track.artist}</p></div>
           <AudioSpectrumBars className='w-[58px]' />
           {local ? <div className='flex shrink-0 flex-col items-center gap-1'><button type='button' aria-label={player.playing ? '暂停音乐' : '试听音乐'} onClick={() => { player.unlock(); if(player.playing) player.pause(); else void player.play(track) }} className='flex h-11 w-11 items-center justify-center rounded-full border border-white/60 text-xl'>{player.playing ? 'Ⅱ' : '▶'}</button><a href={track.qqMusicUrl} target='_blank' rel='noopener noreferrer' className='text-[9px] text-white/80 underline underline-offset-2'>QQ音乐</a></div> : <a href={track.qqMusicUrl} target='_blank' rel='noopener noreferrer' className='flex min-h-11 shrink-0 flex-col items-center justify-center rounded-full border border-white/40 px-2 text-[10px]'>{player.fallback ? <span>演示音频暂不可用</span> : null}<span>QQ音乐试听</span></a>}
