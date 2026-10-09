@@ -116,7 +116,7 @@ export const DEMO_VIEWER = {
   chatStyle: '温和慢热' as ChatStyle,
   groupSize: 3 as GroupSize,
   safety: ['只在公开场合见面', '不交换私人联系方式', '结伴入场与离场'] as SafetyPref[],
-  concertIds: ['night-flight', 'wet-midnight', 'tide-line'],
+  concertIds: ['night-voyage', 'wet-midnight', 'tide-line'],
   blockedUserIds: [] as string[],
   reportedUserIds: [] as string[],
 }

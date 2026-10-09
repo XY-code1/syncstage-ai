@@ -120,7 +120,7 @@ interface PersistedState {
 }
 
 const emptyState: PersistedState = {
-  concertId: 'night-flight',
+  concertId: 'night-voyage',
   selectedTrackId: 'sfl-demo-track-01',
   authorized: false,
   scopes: [...ALL_SCOPES],

@@ -4,7 +4,7 @@ import { Button, DemoBadge } from '../components/ui'
 import { ShieldIcon, MusicIcon, UsersIcon } from '../components/icons'
 
 const flow = ['演出详情', '画像授权', '需求确认', 'Agent 执行', '结果邀请', '限时房间']
-const paths = ['/', '/concert/night-flight/authorize', '/concert/night-flight/task', '/concert/night-flight/running', '/concert/night-flight/matches', '/concert/night-flight/room']
+const paths = ['/', '/concert/night-voyage', '/concert/night-voyage/select-song', '/concert/night-voyage/searching', '/concert/night-voyage/sync/reveal', '/concert/night-voyage/room']
 const tools = ['parse_social_intent', 'get_authorized_music_profile', 'search_same_event_candidates', 'apply_safety_constraints', 'rank_candidates', 'create_temporary_room']
 
 export function ShowcasePage() {

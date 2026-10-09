@@ -31,7 +31,7 @@ export function HomePage() {
   const entryTrack = cueTrack('entry')
   const track = player.activeKey ? trackById(player.activeKey) : entryTrack
   const local = LOCAL_DEMO_AUDIO_ENABLED && !player.fallback
-  const targetId = concert.id === 'night-flight' ? 'night-voyage' : concert.id
+  const targetId = concert.id === 'night-voyage' ? 'night-voyage' : concert.id
   const enter = () => {
     selectConcert(concert.id)
     player.unlock()

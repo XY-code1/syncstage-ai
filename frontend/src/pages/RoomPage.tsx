@@ -383,10 +383,10 @@ export function RoomPage() {
             (roomError || remoteError) ??
             (pending?.status === 'awaiting_peer'
               ? '对方还没有确认同行，确认完成后会开放临时群聊。'
-              : '回到匹配结果完成双向确认后，临时群聊才会开放。')
+              : '回到同频入口完成双向确认后，同行组才会开放。')
           }
-          actionLabel='回到匹配结果'
-          onAction={() => navigate(concertId ? `/concert/${concertId}/matches` : '/messages')}
+          actionLabel='回到同频入口'
+          onAction={() => navigate('/concert/night-voyage')}
           secondaryLabel='返回消息列表'
           onSecondary={() => navigate('/messages')}
         />

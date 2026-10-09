@@ -69,10 +69,10 @@ function ConcertHero({ concert }: { concert: Concert }) {
 }
 
 export function ConcertDetailPage() {
-  const { concertId = 'night-flight' } = useParams()
+  const { concertId = 'night-voyage' } = useParams()
   const navigate = useNavigate()
   const player = useMusicPlayer()
-  const { selectConcert, agent, room, matchResumable, startNewMatch } = useSession()
+  const { selectConcert, agent, room, startNewMatch } = useSession()
   const { qqMusicUser } = useQQMusicAuth()
   const [authorizationOpen, setAuthorizationOpen] = useState(false)
   const [concert, setConcert] = useState<Concert | null>(null)
@@ -97,9 +97,8 @@ export function ConcertDetailPage() {
   }, [load])
 
   // 只有会话未终结（未撤回 / 拒绝 / 过期）时才「回到同行方案」，否则从任务确认重新开始。
-  const entryTarget = matchResumable
-    ? `/concert/${concertId}/matches`
-    : `/concert/${concertId}/select-song`
+  // 主产品链路只有一条：演出入口始终进入选歌，不再回到旧匹配列表。
+  const entryTarget = `/concert/${concertId}/select-song`
 
   /**
    * 主按钮：用这一次真实点击解锁浏览器音频（iPhone Safari 要求），
@@ -108,7 +107,7 @@ export function ConcertDetailPage() {
   const enterNightFlight = () => {
     player.unlock()
     void player.playCue('entry')
-    if (!matchResumable && agent) startNewMatch()
+    if (agent) startNewMatch()
     if (!qqMusicUser.authorized) {
       setAuthorizationOpen(true)
       return

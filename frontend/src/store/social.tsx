@@ -357,7 +357,7 @@ function nowTime(): string {
 export function SocialProvider({
   children,
   room,
-  concertId = 'night-flight',
+  concertId = 'night-voyage',
 }: {
   children: ReactNode
   room: RoomState | null

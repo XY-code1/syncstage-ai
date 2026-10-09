@@ -8,12 +8,12 @@ import { useSession } from '../store/session'
 
 const MERGE_HOLD_MS=850
 export function AgentProgressPage(){
- const player=useAudioPlayer();const track=localDemoAudioByKey(player.selectedTrackId);const {concertId='night-flight'}=useParams();const navigate=useNavigate();const location=useLocation();const started=useRef(false);const jumped=useRef<string|null>(null);const [menu,setMenu]=useState(false)
+ const player=useAudioPlayer();const track=localDemoAudioByKey(player.selectedTrackId);const {concertId='night-voyage'}=useParams();const navigate=useNavigate();const location=useLocation();const started=useRef(false);const jumped=useRef<string|null>(null);const [menu,setMenu]=useState(false)
  const {agent,agentRunning,agentStarting,agentError,runAgent,pauseAgent,cancelAgent,agentMode,agentNotConfigured,setAgentMode}=useSession();const active=agentRunning||agentStarting;const paused=Boolean(agent?.status==='running'&&!active);const exit=useExitToFrequency(cancelAgent)
  const stages=useMemo(()=>syncStagesOf(agent?.trace??[]),[agent?.trace]);const done=stages.filter(s=>s.state==='done').length;const merged=Boolean(agent&&!active&&agent.status==='pending_confirmation'&&agent.rankedCandidates.length);const failed=Boolean(agentError||agent?.status==='error')
  useEffect(()=>{if(!location.pathname.endsWith('/searching')||started.current||active||agent)return;started.current=true;void runAgent({text:`寻找同场同行者，一起循环《${track.title}》，只在公开场合见面。`})},[active,agent,location.pathname,runAgent,track.title])
  useEffect(()=>{void player.playSelected()},[])
- useEffect(()=>{if(!merged||!agent||jumped.current===agent.sessionId)return;const id=window.setTimeout(()=>{jumped.current=agent.sessionId;navigate(`/concert/${concertId}/reveal`,{replace:true})},MERGE_HOLD_MS);return()=>clearTimeout(id)},[agent,concertId,merged,navigate])
+ useEffect(()=>{if(!merged||!agent||jumped.current===agent.sessionId)return;const id=window.setTimeout(()=>{jumped.current=agent.sessionId;navigate('/concert/night-voyage/sync/reveal',{replace:true})},MERGE_HOLD_MS);return()=>clearTimeout(id)},[agent,concertId,merged,navigate])
  const visualStages=[{label:'听见你的旋律',done:done>=1},{label:'对齐音乐偏好',done:done>=3},{label:'找到同频的人',done:merged||done>=5}]
  if(agentMode==='live'&&agentNotConfigured)return <div className='signal-scene signal-search'><img className='signal-scene-bg' src={`${import.meta.env.BASE_URL}visuals/summer-concert-bg.webp`} alt=''/><div className='signal-scene-mask'/><div className='signal-error'><h1>音乐信号暂时没有送出</h1><p>{agentNotConfigured}</p><button onClick={()=>setAgentMode('mock')}>使用 Demo 模式继续</button></div></div>
  return <div className={`signal-scene signal-search ${merged?'signal-search-matched':''}`}>

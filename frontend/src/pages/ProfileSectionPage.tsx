@@ -176,7 +176,7 @@ function MusicSection() {
           variant='secondary'
           size='sm'
           full
-          onClick={() => navigate('/concert/night-flight/authorize?edit=1')}
+          onClick={() => navigate('/concert/night-voyage/authorize?edit=1')}
         >
           去修改授权项
         </Button>

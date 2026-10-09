@@ -40,7 +40,7 @@ const EXPLAIN: Record<string, { what: string; why: string; not: string }> = {
 }
 
 export function MusicAuthPage() {
-  const { concertId = 'night-flight' } = useParams()
+  const { concertId = 'night-voyage' } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
   const { scopes, toggleScope, setScopes, completeAuthorization, dataMode } = useSession()

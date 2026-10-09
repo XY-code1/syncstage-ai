@@ -10,7 +10,7 @@ import { ImmersiveMusicStage } from '../components/music/ImmersiveMusicStage'
 const clock = (value: number) => `0:${String(Math.floor(value)).padStart(2, '0')}`
 
 export function SongSelectPage() {
-  const { concertId = 'night-flight' } = useParams()
+  const { concertId = 'night-voyage' } = useParams()
   const navigate = useNavigate()
   const player = useAudioPlayer()
   const reactive = useAudioReactive()
@@ -29,7 +29,7 @@ export function SongSelectPage() {
   }
   const continueFlow = () => {
     setLeaving(true)
-    selectConcert(concertId === 'night-voyage' ? 'night-flight' : concertId)
+    selectConcert(concertId === 'night-voyage' ? 'night-voyage' : concertId)
     startNewMatch()
     setSelectedTrackId(track.id)
     window.setTimeout(

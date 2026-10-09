@@ -3,13 +3,13 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Avatar } from '../components/Avatar'
 import { ShieldIcon } from '../components/icons'
 import { demoConcerts } from '../data/demoData'
-import { revealCandidateById } from '../data/revealCandidates'
+import { revealCandidateById, sourceCandidateId } from '../data/revealCandidates'
 import { useProfile } from '../store/profile'
 import { useSession } from '../store/session'
 
 /** 一屏完成 Agent 破冰：先看同频邀请，再看 AI 对齐方案，最终只保留三种真人操作。 */
 export function AgentIcebreakPage() {
-  const { concertId = 'night-flight', candidateId = '' } = useParams()
+  const { concertId = 'night-voyage', candidateId = '' } = useParams()
   const navigate = useNavigate()
   const { agent, invite, peerConfirm } = useSession()
   const { profile } = useProfile()
@@ -19,7 +19,8 @@ export function AgentIcebreakPage() {
   const [inviteState, setInviteState] = useState<'idle' | 'waiting' | 'accepted'>('idle')
   const concert = demoConcerts.find((item) => item.id === concertId)
   const reveal = revealCandidateById(candidateId)
-  const candidate = agent?.rankedCandidates.find((item) => item.userId === candidateId) ?? agent?.rankedCandidates[0]
+  // candidateId 是流程的一等状态：缺失时不静默替换为第一位候选人，避免头像/理由错配。
+  const candidate = agent?.rankedCandidates.find((item) => item.userId === sourceCandidateId(candidateId))
   const name = profile.nickname || 'Demo访客'
   const peerName = reveal?.displayName ?? candidate?.candidate.nickname ?? '同频搭子'
   const song = reveal?.sharedSong ?? candidate?.sharedSongs?.[0] ?? '暂无足够音乐依据'
@@ -46,7 +47,7 @@ export function AgentIcebreakPage() {
   }, [inviteState, peerConfirm])
 
   if (!candidate) {
-    return <div className='flex min-h-[100dvh] items-center justify-center bg-[#10162d] p-6 text-center text-white'>暂无可用匹配，请先完成同频寻找。</div>
+    return <div className='summer-home flex min-h-[100dvh] items-center justify-center p-6 text-center text-white'><div className='rounded-3xl border border-white/20 bg-[#23345f]/75 p-6 backdrop-blur-xl'><p className='text-lg font-semibold'>这张同频邀请已失效</p><p className='mt-2 text-sm text-white/70'>请返回同频卡重新选择同行伙伴。</p><button type='button' className='mt-5 min-h-12 rounded-full bg-[#31f28b] px-6 font-semibold text-[#062a26]' onClick={() => navigate('/concert/night-voyage/sync/reveal')}>返回同频卡</button></div></div>
   }
 
   return (
@@ -55,7 +56,7 @@ export function AgentIcebreakPage() {
       <div className='pointer-events-none absolute inset-0 bg-gradient-to-b from-[#18245a]/40 via-[#1f214d]/55 to-[#10162d]/90' />
       <div className='relative z-10 flex min-h-[100dvh] flex-col px-4 safe-top'>
         <header className='flex items-center gap-3 py-3'>
-          <button type='button' onClick={() => navigate('/concert/night-voyage')} aria-label='返回演出页' className='flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-white/10 text-xl backdrop-blur-md'>‹</button>
+          <button type='button' onClick={() => navigate('/concert/night-voyage/sync/reveal', { replace: true })} aria-label='返回同频卡' className='flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-white/10 text-xl backdrop-blur-md'>‹</button>
           <div className='min-w-0 flex-1'><p className='text-[11px] uppercase tracking-[.24em] text-white/65'>QQ音乐 · 一起去现场</p><h1 className='truncate text-[21px] font-semibold'>同频邀请卡</h1></div>
           <span className='text-[12px] text-white/65'>{started ? '2 / 2' : '1 / 2'}</span>
         </header>
