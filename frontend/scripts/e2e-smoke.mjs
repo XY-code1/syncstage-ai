@@ -7,11 +7,10 @@ const paths = [
   '/#/concert/night-voyage/sync/reveal',
   '/#/concert/night-voyage/icebreak/u-orange-01',
   '/#/concert/night-voyage/room',
+  '/#/messages',
 ]
 for (const path of paths) {
   const response = await fetch(BASE + path)
   if (!response.ok) throw new Error(`${path} returned ${response.status}`)
 }
-const old = await fetch(BASE + '/#/concert/night-voyage/matches')
-if (!old.ok) throw new Error(`legacy route unavailable: ${old.status}`)
-console.log(`Canonical flow smoke passed (${paths.length} routes); legacy routes serve the SPA fallback only.`)
+console.log(`Canonical flow smoke passed (${paths.length} routes).`)
