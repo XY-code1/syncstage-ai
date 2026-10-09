@@ -205,7 +205,7 @@ const DEFAULT_MESSAGES: Record<string, ChatMessage[]> = {
       threadId: 'agent-notify',
       authorId: 'agent',
       authorName: '一起去现场 Agent',
-      text: '工具调用记录已收进「查看 Agent 工作过程」二级页面，按需展开即可。',
+      text: 'Agent 已完成同频对齐，集合点与共同歌曲已同步。',
       time: '18:21',
     },
   ],
