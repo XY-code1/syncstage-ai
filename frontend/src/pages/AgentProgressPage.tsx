@@ -22,7 +22,7 @@ export function AgentProgressPage(){
   <main className='signal-search-main'><div className='signal-title'><h1>{paused?'音乐信号已暂停':'正在把你的音乐信号送向人群'}</h1><p>{paused?'继续后将沿用当前歌曲与条件':`寻找也在循环《${track.title}》的同场听众`}</p></div>
    <div className='signal-orbit' aria-label='音乐信号正在扩散'>
     <div className='signal-ribbon ribbon-a'/><div className='signal-ribbon ribbon-b'/>{Array.from({length:18},(_,i)=><i className='signal-firefly' key={i} style={{'--i':i} as React.CSSProperties}/>) }
-    {[0,1,2].map(i=><span key={i} className={`audience-light audience-${i}`}><img src={`${import.meta.env.BASE_URL}portraits/demo-orange.webp`} alt='Demo同场听众'/></span>)}
+    {['candidate-orange.webp','candidate-jiangli.webp','candidate-ache.webp'].map((avatar,i)=><span key={avatar} className={`audience-light audience-${i}`}><img src={`${import.meta.env.BASE_URL}avatars/${avatar}`} alt={['靠近舞台的橘子','写歌的江离','带着相机的阿澈'][i]}/></span>)}
     <article className='search-paper-card'><img src={`${import.meta.env.BASE_URL}visuals/summer-concert-home.webp`} alt='当前歌曲视觉封面'/><div><small>今夜信号</small><strong>{track.title}</strong><span>{track.artist}</span></div><b>♪</b></article>
    </div>
    <ol className='signal-progress'>{visualStages.map((s,i)=><li key={s.label} className={s.done?'done':i===visualStages.findIndex(x=>!x.done)?'current':''}><i>{s.done?'✓':''}</i><span>{s.label}</span></li>)}</ol>

@@ -12,7 +12,7 @@ import { QQMusicAuthorizationSheet } from '../components/QQMusicAuthorizationShe
 import { useQQMusicAuth } from '../store/qqMusicAuth'
 
 const HOME_LISTENERS = 128
-const avatars = [0, 1, 2, 3]
+const avatars = ['candidate-orange.webp', 'candidate-jiangli.webp', 'candidate-ache.webp', 'demo-user-avatar.webp']
 
 export function HomePage() {
   const navigate = useNavigate()
@@ -48,7 +48,6 @@ export function HomePage() {
     <header className='relative z-10 flex h-14 items-center gap-2 px-5'>
       <span className='flex h-7 w-7 items-center justify-center rounded-full bg-[#ffe637] text-lg font-bold text-[#00ab6b]'>♪</span>
       <strong className='text-[18px]'>QQ音乐</strong>
-      <span className='rounded-full border border-white/45 px-2 py-1 text-[11px] text-white/85'>概念功能 Demo</span>
       <span className='ml-auto'><MyProfileAvatar size={32} /></span>
     </header>
     <main className='relative z-10 flex min-h-[calc(100dvh-56px)] flex-col px-5 pb-5'>
@@ -64,7 +63,7 @@ export function HomePage() {
       </section>
       <section className='mt-auto pt-5'>
         <div className='flex min-h-[52px] items-center gap-2 rounded-full border border-white/40 bg-[#26365c]/60 px-3 backdrop-blur-md'>
-          <div className='flex -space-x-3'>{avatars.map((index) => <img key={index} src={`${import.meta.env.BASE_URL}portraits/demo-orange.webp`} alt={`Demo 听众 ${index+1}`} className='h-8 w-8 rounded-full border-2 border-[#dce3f4] object-cover' style={{filter: index % 2 ? 'hue-rotate(18deg)' : undefined, objectPosition: `${40+index*5}% center`}} />)}</div>
+          <div className='flex -space-x-3'>{avatars.map((avatar, index) => <img key={avatar} src={`${import.meta.env.BASE_URL}${avatar === 'demo-user-avatar.webp' ? 'assets/' : 'avatars/'}${avatar}`} alt={`同场听众 ${index+1}`} className='h-8 w-8 rounded-full border-2 border-[#dce3f4] object-cover' />)}</div>
           <p className='whitespace-nowrap text-[12px]'><b className='mr-1 text-[24px] text-[#57ffc0]'>{HOME_LISTENERS}</b>位同场听众正在靠近</p>
         </div>
         <button type='button' onClick={enter} className='mt-4 flex min-h-[56px] w-full items-center justify-center gap-3 rounded-full border border-[#b6ffdd]/70 bg-[#33f8ac] text-[19px] font-black text-[#062a26] shadow-[0_0_28px_rgba(33,255,170,.35)]'>✧ 今晚同频 <span className='text-2xl'>›</span></button>

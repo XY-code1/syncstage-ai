@@ -46,7 +46,6 @@ export function SongSelectPage() {
       <header className='signal-header immersive-song-header'>
         <button aria-label='返回首页' onClick={() => navigate('/home')}>‹</button>
         <div><span>QQ音乐 · 一起去现场</span><b>{index + 1}/3</b></div>
-        <em>概念功能 Demo</em>
       </header>
       <main
         className='immersive-song-main'

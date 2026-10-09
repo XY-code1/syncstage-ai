@@ -4,7 +4,7 @@ import { MusicControl } from './music/MusicControl'
 
 /**
  * 模拟 QQ 音乐顶栏。只借鉴音乐产品的信息层级与品牌绿点缀，
- * 不复刻 QQ 音乐受版权保护的完整界面，并始终标注"概念功能 Demo"。
+ * 不复刻 QQ 音乐受版权保护的完整界面。
  */
 export function QQMusicBar({
   title = '演出',
@@ -25,7 +25,6 @@ export function QQMusicBar({
         </span>
         <span className='text-[13px] font-semibold tracking-wide text-white'>QQ音乐</span>
         <span className='rounded-pill border border-brand-500/40 bg-brand-500/12 px-2 py-[2px] text-[10px] text-brand-200'>
-          概念功能 Demo
         </span>
         <span className='ml-auto text-[10px] text-white/35'>非官方页面</span>
       </div>
